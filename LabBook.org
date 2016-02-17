@@ -1,0 +1,248 @@
+#+TITLE: Beniamine's LabBook
+#+AUTHOR: Beniamine
+#+LATEX_HEADER: \usepackage[margin=2cm,a4paper]{geometry}
+#+STARTUP: overview indent
+#+TAGS: Lucas(L) Alef(A) noexport(n) deprecated(d)
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+SEQ_TODO: TODO(t!) STARTED(s!) WAITING(w!) | DONE(d!) CANCELLED(c!) DEFERRED(f!)
+
+* Memory access along time (from MOCA)
+
+David's traces have only variables. We should look to them as states.
+
+So convert accordingly:
+
+#+begin_src bash :results output :session :exports both
+grep ^Variable Moca_matrix_bloc_20160217_Virt.pjdump | 
+   awk -F, '{print "State,"$2",access,"$4","$5","$6",0,"$3}' > states_Virt.csv
+grep ^Variable Moca_matrix_bloc_20160217_Phy.pjdump | 
+   awk -F, '{print "State,"$2",access,"$4","$5","$6",0,"$3}' > states_Phy.csv
+#+END_SRC
+
+#+RESULTS:
+
+Great, now let's load them into R.
+
+#+begin_src R :results output :session :exports both
+read_paje_trace <- function(file) {
+  df <- read.csv(file, header=FALSE, strip.white=TRUE)
+  names(df) <- c("Nature","ResourceId","Type","Start","End","Duration", "Depth", "Value")
+  df$Origin=file
+  m <- min(df$Start)
+  df$Start <- df$Start - m
+  df$End <- df$Start+df$Duration
+  df$Origin <- NULL
+  df$Nature <- NULL
+  df$Depth <- NULL
+  df
+}
+df_Virt <- read_paje_trace("states_Virt.csv");
+df_Phy <- read_paje_trace("states_Phy.csv");
+#+end_src
+
+#+RESULTS:
+
+#+begin_src R :results output :session :exports both
+nrow(df_Virt);
+nrow(df_Phy);
+#+end_src
+
+#+RESULTS:
+: [1] 4478461
+: [1] 4472513
+
+The largest dataframes I have ever seen.
+
+Let's play with care.
+
+#+begin_src R :results output graphics :file (org-babel-temp-file "figure" ".png") :exports both :width 600 :height 400 :session
+library(ggplot2);
+df <- df_Virt;
+df <- df[df$ResourceId == 140737310789152, ];
+p <- ggplot(df) +
+  theme_bw() +
+  geom_segment(size=15, aes(x=Start,xend=End, y=ResourceId,yend=ResourceId), color="black") +
+  geom_segment(size=13, aes(x=Start,xend=End, y=ResourceId,yend=ResourceId, color=Value)) +
+  facet_wrap(~Value, ncol=1);
+p
+#+end_src
+
+#+RESULTS:
+[[file:/tmp/babel-9357QOL/figure9357w0Z.png]]
+
+
+Strange. Let's see how many *Shared_read* there are.
+
+#+begin_src R :results output :session :exports both
+nrow(df[df$Value == "Private_Read" & df$Start < 200000 & df$Start > 150000,]);
+nrow(df[df$Value == "Shared_Read" & df$Start < 180000 & df$Start > 210000,]);
+df[df$Start > 180000 & df$Start < 210000,]
+#+end_src
+
+#+RESULTS:
+: [1] 0
+: [1] 0
+:          ResourceId   Type  Start    End Duration       Value
+: 289172 1.407373e+14 access 189573 221868    32295 Shared_Read
+: 289173 1.407373e+14 access 189573 221868    32295 Shared_Read
+: 289174 1.407373e+14 access 189573 221868    32295 Shared_Read
+: 289175 1.407373e+14 access 189573 221868    32295 Shared_Read
+
+Lot's of them for this particular address. Let's zoom in.
+
+#+begin_src R :results output graphics :file img/virt_first_try_2.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+df <- df_Virt;
+df <- df;
+p <- ggplot(df) +
+  theme_bw() +
+  geom_segment(size=13, aes(x=Start,xend=End, y=ResourceId,yend=ResourceId, color=Value), alpha=.4) +
+  facet_wrap(~Value, ncol=1);
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/first_try_2.png]]
+
+
+
+#+begin_src R :results output graphics :file img/phy_first_try_1.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+df <- df_Phy;
+df <- df;
+p <- ggplot(df) +
+  theme_bw() +
+  geom_segment(size=13, aes(x=Start,xend=End, y=ResourceId,yend=ResourceId, color=Value), alpha=.4) +
+  facet_wrap(~Value, ncol=1);
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/phy_first_try_1.png]]
+
+
+
+* Calculating intensity
+
+_First Attempt_
+
+I'll try with bash.
+
+#+begin_src bash :results output :session :exports both
+cat states_Virt.csv  | grep Shared_Read > states_Virt_shared_read.csv
+cat states_Virt_shared_read.csv | cut -d, -f2 | sort | uniq > add_Virt
+cat states_Virt_shared_read.csv  | cut -d, -f4-6 | sort | uniq  > timeslices
+
+cat states_Virt_shared_read.csv  | cut -d, -f2,4,5,8 > states_Virt_shared_read_essential.csv
+cat states_Virt_shared_read_essential.csv  | sort | uniq  > states_Virt_shared_read_essential_unique.csv
+while read line ; do echo -n "$line,"; cat states_Virt_shared_read_essential.csv | grep "$line" | wc -l; done < states_Virt_shared_read_essential_unique.csv > states_Virt_shared_read_essential_unique_with_intensity.csv
+#+end_src
+
+Done. Just check the file:
++ =states_Virt_shared_read_essential_unique_with_intensity.csv=
+You can load with R and play with it.
+
+_Second Attempt_
+
+Actually, I believe I can do it faster and cleaner with R.
+
+#+begin_src R :results output :session :exports both
+library(plyr);
+k <- read.csv("states_Virt_shared_read.csv", header=FALSE);
+head(k);
+#+end_src
+
+#+RESULTS:
+:      V1           V2     V3 V4   V5   V6 V7          V8
+: 1 State 1.407374e+14 access  1 4396 4395  0 Shared_Read
+: 2 State 1.407374e+14 access  1 4396 4395  0 Shared_Read
+: 3 State 1.407373e+14 access  1 4396 4395  0 Shared_Read
+: 4 State 1.407373e+14 access  1 4396 4395  0 Shared_Read
+: 5 State 1.407375e+14 access  1 4396 4395  0 Shared_Read
+: 6 State 1.407375e+14 access  1 4396 4395  0 Shared_Read
+
+#+begin_src R :results output :session :exports both
+names(k) <- c("Nature", "Address", "Type", "Start", "End", "Duration", "Imbric", "Value");
+k$Nature <- NULL;
+k$Type <- NULL;
+k$Imbric <- NULL;
+head(k);
+#+end_src
+
+#+RESULTS:
+:        Address Start  End Duration       Value
+: 1 1.407374e+14     1 4396     4395 Shared_Read
+: 2 1.407374e+14     1 4396     4395 Shared_Read
+: 3 1.407373e+14     1 4396     4395 Shared_Read
+: 4 1.407373e+14     1 4396     4395 Shared_Read
+: 5 1.407375e+14     1 4396     4395 Shared_Read
+: 6 1.407375e+14     1 4396     4395 Shared_Read
+
+Do the magic. This command takes time.
+
+#+begin_src R :results output :session :exports both
+library(plyr);
+g <- ddply(k, .(Address, Start, End, Duration, Value), summarize, N=length(Value));
+head(g);
+#+end_src
+
+#+RESULTS:
+:        Address Start  End Duration       Value N
+: 1 1.407374e+14     1 4396     4395 Shared_Read 1
+: 2 1.407374e+14     1 4396     4395 Shared_Read 1
+: 3 1.407373e+14     1 4396     4395 Shared_Read 1
+: 4 1.407373e+14     1 4396     4395 Shared_Read 1
+: 5 1.407375e+14     1 4396     4395 Shared_Read 1
+: 6 1.407375e+14     1 4396     4395 Shared_Read 1
+
+#+begin_src R :results output :session :exports both
+summary(g$N);
+#+end_src
+
+#+RESULTS:
+:    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+:   1.000   2.000   3.000   3.421   5.000   8.000
+
+#+begin_src R :results output graphics :file img/intensity_1.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(g) +
+  theme_bw() +
+  geom_segment(size=4, aes(x=Start,xend=End, y=Address,yend=Address, color=N)) +
+  facet_wrap(~Value, ncol=1);
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_1.png]]
+
+** Old Stuff                                                    :deprecated:
+
+Let's make rows unique, since now we have the intensity.
+
+#+begin_src R :results output :session :exports both
+h <- unique(g);
+#+end_src
+
+#+RESULTS:
+
+#+begin_src R :results output :session :exports both
+head(h);
+#+end_src
+
+#+RESULTS:
+:        Address Start  End Duration       Value N
+: 1 1.407374e+14     1 4396     4395 Shared_Read 1
+: 2 1.407374e+14     1 4396     4395 Shared_Read 1
+: 3 1.407373e+14     1 4396     4395 Shared_Read 1
+: 4 1.407373e+14     1 4396     4395 Shared_Read 1
+: 5 1.407375e+14     1 4396     4395 Shared_Read 1
+: 6 1.407375e+14     1 4396     4395 Shared_Read 1
+
+#+begin_src R :results output graphics :file (org-babel-temp-file "figure" ".png") :exports both :width 600 :height 400 :session
+ggplot(h, aes(x=Start, y=N)) + geom_point();
+#+end_src
+
+#+RESULTS:
+[[file:/tmp/babel-9357QOL/figure9357x8U.png]]
+
