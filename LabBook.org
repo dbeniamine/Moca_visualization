@@ -150,17 +150,26 @@ Actually, I believe I can do it faster and cleaner with R.
 #+begin_src R :results output :session :exports both
 library(plyr);
 k <- read.csv("states_Virt_shared_read.csv", header=FALSE);
+options("scipen"=100, "digits"=4);
 head(k);
 #+end_src
 
 #+RESULTS:
-:      V1           V2     V3 V4   V5   V6 V7          V8
-: 1 State 1.407374e+14 access  1 4396 4395  0 Shared_Read
-: 2 State 1.407374e+14 access  1 4396 4395  0 Shared_Read
-: 3 State 1.407373e+14 access  1 4396 4395  0 Shared_Read
-: 4 State 1.407373e+14 access  1 4396 4395  0 Shared_Read
-: 5 State 1.407375e+14 access  1 4396 4395  0 Shared_Read
-: 6 State 1.407375e+14 access  1 4396 4395  0 Shared_Read
+:      V1              V2     V3 V4   V5   V6 V7          V8
+: 1 State 140737351871824 access  1 4396 4395  0 Shared_Read
+: 2 State 140737351871976 access  1 4396 4395  0 Shared_Read
+: 3 State 140737347542408 access  1 4396 4395  0 Shared_Read
+: 4 State 140737347542640 access  1 4396 4395  0 Shared_Read
+: 5 State 140737488351205 access  1 4396 4395  0 Shared_Read
+: 6 State 140737488350713 access  1 4396 4395  0 Shared_Read
+
+#+begin_src R :results output :session :exports both
+sapply(k, class);
+#+end_src
+
+#+RESULTS:
+:        V1        V2        V3        V4        V5        V6        V7        V8 
+:  "factor" "numeric"  "factor" "integer" "integer" "integer" "integer"  "factor"
 
 #+begin_src R :results output :session :exports both
 names(k) <- c("Nature", "Address", "Type", "Start", "End", "Duration", "Imbric", "Value");
@@ -171,13 +180,21 @@ head(k);
 #+end_src
 
 #+RESULTS:
-:        Address Start  End Duration       Value
-: 1 1.407374e+14     1 4396     4395 Shared_Read
-: 2 1.407374e+14     1 4396     4395 Shared_Read
-: 3 1.407373e+14     1 4396     4395 Shared_Read
-: 4 1.407373e+14     1 4396     4395 Shared_Read
-: 5 1.407375e+14     1 4396     4395 Shared_Read
-: 6 1.407375e+14     1 4396     4395 Shared_Read
+:           Address Start  End Duration       Value
+: 1 140737351871824     1 4396     4395 Shared_Read
+: 2 140737351871976     1 4396     4395 Shared_Read
+: 3 140737347542408     1 4396     4395 Shared_Read
+: 4 140737347542640     1 4396     4395 Shared_Read
+: 5 140737488351205     1 4396     4395 Shared_Read
+: 6 140737488350713     1 4396     4395 Shared_Read
+
+#+begin_src R :results output :session :exports both
+sapply(k, class);
+#+end_src
+
+#+RESULTS:
+:   Address     Start       End  Duration     Value 
+: "numeric" "integer" "integer" "integer"  "factor"
 
 Do the magic. This command takes time.
 
@@ -197,6 +214,22 @@ head(g);
 : 6 1.407375e+14     1 4396     4395 Shared_Read 1
 
 #+begin_src R :results output :session :exports both
+head(g);
+sapply(g, class);
+#+end_src
+
+#+RESULTS:
+:           Address Start  End Duration       Value N
+: 1 140737351871824     1 4396     4395 Shared_Read 1
+: 2 140737351871976     1 4396     4395 Shared_Read 1
+: 3 140737347542408     1 4396     4395 Shared_Read 1
+: 4 140737347542640     1 4396     4395 Shared_Read 1
+: 5 140737488351205     1 4396     4395 Shared_Read 1
+: 6 140737488350713     1 4396     4395 Shared_Read 1
+:   Address     Start       End  Duration     Value         N 
+: "numeric" "integer" "integer" "integer"  "factor" "integer"
+
+#+begin_src R :results output :session :exports both
 summary(g$N);
 #+end_src
 
@@ -204,17 +237,137 @@ summary(g$N);
 :    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 :   1.000   2.000   3.000   3.421   5.000   8.000
 
-#+begin_src R :results output graphics :file img/intensity_1.png :exports both :width 600 :height 400 :session
+#+begin_src R :results output :session :exports both
+#head(g[g$Address == 140737308215152,]);
+head(g[g$Address == 140737312395264,]);
+median(g[g$Address > 7000000,]$Address);
+#tail(g);
+#+end_src
+
+#+RESULTS:
+:               Address  Start    End Duration       Value N
+: 17014 140737312395264  28278  67005    38727 Shared_Read 3
+: 22805 140737312395264  54041  77448    23407 Shared_Read 2
+: 30183 140737312395264  67009 126332    59323 Shared_Read 3
+: 33031 140737312395264  77453  90227    12774 Shared_Read 2
+: 36721 140737312395264  90243 137116    46873 Shared_Read 2
+: 50336 140737312395264 126336 171611    45275 Shared_Read 5
+: [1] 140737314631680
+
+#+begin_src R :results output graphics :file img/intensity_1_up.png :exports both :width 600 :height 400 :session
 library(ggplot2);
-p <- ggplot(g) +
+p <- ggplot(g[g$Address > 6304416,]) +
   theme_bw() +
-  geom_segment(size=4, aes(x=Start,xend=End, y=Address,yend=Address, color=N)) +
-  facet_wrap(~Value, ncol=1);
+  geom_segment(size=7, aes(x=Start,xend=End, y=Address,yend=Address, color=N)) +
+  facet_wrap(~Value, ncol=1);# + ylim(139000000000000, NA);
 p
 #+end_src
 
 #+RESULTS:
-[[file:img/intensity_1.png]]
+[[file:img/intensity_1_up.png]]
+
+I just can't find out the best Y scale. Let's create a histogram of
+these addresses.
+
+#+begin_src R :results output :session :exports both
+h <- g[g$Address > 7304416,];
+h$Address = h$Address - 140737000000000;
+head(h);
+#+end_src
+
+#+RESULTS:
+:     Address Start  End Duration       Value N
+: 1 351871824     1 4396     4395 Shared_Read 1
+: 2 351871976     1 4396     4395 Shared_Read 1
+: 3 347542408     1 4396     4395 Shared_Read 1
+: 4 347542640     1 4396     4395 Shared_Read 1
+: 5 488351205     1 4396     4395 Shared_Read 1
+: 6 488350713     1 4396     4395 Shared_Read 1
+
+#+begin_src R :results output graphics :file img/address_histogram.png :exports both :width 600 :height 400 :session
+ggplot(h, aes(Address)) + xlim(300000000, 330000000) + geom_histogram();
+#+end_src
+
+#+RESULTS:
+[[file:img/address_histogram.png]]
+
+Okay, let's try again.
+
+#+begin_src R :results output graphics :file img/intensity_2.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(h) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=N)) +
+  facet_wrap(~Value, ncol=1);# + ylim(300000000, 330000000)
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_2.png]]
+
+
+Not that good, need further filtering:
+
+#+begin_src R :results output :session :exports both
+summary(h$Address);
+#+end_src
+
+#+RESULTS:
+:      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+: 271000000 310000000 315000000 315000000 319000000 488000000
+
+Let's get only addresses from the 1st to the 3rd Qu.
+
+#+begin_src R :results output graphics :file img/intensity_3.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(h) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=N)) +
+  facet_wrap(~Value, ncol=1) + ylim(310000000, 319000000)
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_3.png]]
+
+Finally. Let's reduce size.
+
+#+begin_src R :results output graphics :file img/intensity_4.png :exports both :width 600 :height 800 :session
+library(ggplot2);
+p <- ggplot(h) +
+  theme_bw() +
+  geom_segment(size=0.2, aes(x=Start,xend=End, y=Address,yend=Address, color=N)) +
+  facet_wrap(~Value, ncol=1) + ylim(310000000, 319000000)
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_4.png]]
+
+
+#+begin_src R :results output graphics :file img/intensity_5.png :exports both :width 600 :height 2000 :session
+library(ggplot2);
+p <- ggplot(h) +
+  theme_bw() +
+  geom_segment(size=0.2, aes(x=Start,xend=End, y=Address,yend=Address, color=N)) +
+  facet_wrap(~Value, ncol=1) + ylim(310000000, 319000000)
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_5.png]]
+
+#+begin_src R :results output graphics :file img/intensity_6.png :exports both :width 600 :height 2000 :session
+library(ggplot2);
+p <- ggplot(h) +
+  theme_bw() +
+  geom_segment(size=0.5, aes(x=Start,xend=End, y=Address,yend=Address, color=N)) +
+  facet_wrap(~Value, ncol=1) + ylim(310000000, 311000000)
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_6.png]]
 
 ** Old Stuff                                                    :deprecated:
 
