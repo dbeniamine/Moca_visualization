@@ -7,7 +7,7 @@
 #+EXPORT_EXCLUDE_TAGS: noexport
 #+SEQ_TODO: TODO(t!) STARTED(s!) WAITING(w!) | DONE(d!) CANCELLED(c!) DEFERRED(f!)
 
-* Memory access along time (from MOCA)
+* 2016-02-17 Memory access along time (from MOCA)
 
 David's traces have only variables. We should look to them as states.
 
@@ -123,7 +123,7 @@ p
 
 
 
-* Calculating intensity
+* 2016-02-17 Calculating intensity
 
 _First Attempt_
 
