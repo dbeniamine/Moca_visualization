@@ -471,3 +471,246 @@ State,140737305623152,access,17863,17762,-101,0,Shared_Read
 
 _Summary_:
 - Negative durations (probably an error)
+
+* 2016-02-23 Removing durations with negative values
+
+Okay, let's proceed anyway, removing the problem.
+
+#+begin_src sh :results output :session :exports both
+cd v2
+cat states_Virt.csv | grep -v "-" > states_Virt_without_neg_durations.csv
+#+end_src
+
+#+RESULTS:
+
+Great, now let's load it.
+
+#+begin_src R :results output :session :exports both
+read_paje_trace <- function(file) {
+  df <- read.csv(file, header=FALSE, strip.white=TRUE)
+  names(df) <- c("Nature","ResourceId","Type","Start","End","Duration", "Depth", "Value")
+  df$Origin=file
+  m <- min(df$Start)
+  df$Start <- df$Start - m
+  df$End <- df$Start+df$Duration
+  df$Origin <- NULL
+  df$Nature <- NULL
+  df$Depth <- NULL
+  df
+}
+df_Virt <- read_paje_trace("v2/states_Virt_without_neg_durations.csv");
+#+end_src
+
+#+RESULTS:
+
+#+begin_src R :results output :session :exports both
+df <- df_Virt;
+df$Type <- NULL;
+head(df);
+#+end_src
+
+#+RESULTS:
+:   ResourceId Start  End Duration         Value
+: 1    4656816     0 4395     4395  Private_Read
+: 2    6303348     0 4395     4395  Private_Read
+: 3    6303348     0 4395     4395 Private_Write
+: 4    6303752     0 4395     4395  Private_Read
+: 5    6303752     0 4395     4395 Private_Write
+: 6    7330440     0 4395     4395  Private_Read
+
+#+begin_src R :results output graphics :file img/Moca_matrix_bloc_20160218Virt_overview.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(df) +
+  theme_bw() +
+  geom_segment(size=13, aes(x=Start,xend=End, y=ResourceId,yend=ResourceId, color=Value), alpha=.4) +
+  facet_wrap(~Value, ncol=1);
+p
+#+end_src
+
+#+RESULTS:
+[[./img/Moca_matrix_bloc_20160218Virt_overview.png]]
+
+Let's remove =Shared_Write= and =Private_Write=.
+
+#+begin_src R :results output graphics :file img/Moca_matrix_bloc_20160218Virt_filter_1.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(df[df$Value != "Private_Write" & df$Value != "Shared_Write",]) +
+  theme_bw() +
+  geom_segment(size=13, aes(x=Start,xend=End, y=ResourceId,yend=ResourceId, color=Value), alpha=.4) +
+  facet_wrap(~Value, ncol=1);
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/Moca_matrix_bloc_20160218Virt_filter_1.png]]
+
+Let's zoom in to the beginning, reduce segment size:
+
+#+begin_src R :results output graphics :file img/Moca_matrix_bloc_20160218Virt_filter_2.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(df[df$Value != "Private_Write" & df$Value != "Shared_Write",]) +
+  theme_bw() +
+  geom_segment(size=1, aes(x=Start,xend=End, y=ResourceId,yend=ResourceId, color=Value), alpha=.4) +
+  facet_wrap(~Value, ncol=1) + xlim(0, 90243);
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/Moca_matrix_bloc_20160218Virt_filter_2.png]]
+
+That's strange the middle with nothing. The problem is this:
+
+#+begin_src sh :results output :session :exports both
+cat v2/states_Virt_without_neg_durations.csv | cut -d, -f2 | head -n30 | cat -n
+#+end_src
+
+#+RESULTS:
+#+begin_example
+     1	4656816
+     2	6303348
+     3	6303348
+     4	6303752
+     5	6303752
+     6	7330440
+     7	7330440
+     8	7341840
+     9	7341840
+    10	8700368
+    11	8700368
+    12	8737104
+    13	8737104
+    14	8784688
+    15	8784688
+    16	8787648
+    17	8787648
+    18	8790320
+    19	8790320
+    20	140152691697344
+    21	140152691777685
+    22	140152691881456
+    23	140152691913632
+    24	140152692128528
+    25	140152692183424
+    26	140152692227168
+    27	140152692306624
+    28	140152692447204
+    29	140152692585408
+    30	140152692856576
+#+end_example
+
+The first 19 events have very low addresses. All other addresses are
+much larger. That's why we have those blank spaces in the plot. We
+should remove these low addresses. Sorting these events numerically
+indicates that I should look only to addresses between 
+140152691697344 and 
+140737488351205.
+
+#+begin_src R :results output :session :exports both
+sapply(df, class);
+#+end_src
+
+#+RESULTS:
+: ResourceId      Start        End   Duration      Value 
+:  "numeric"  "integer"  "integer"  "integer"   "factor"
+
+Great, we can filter easily.
+
+#+begin_src R :results output graphics :file img/Moca_matrix_bloc_20160218Virt_filter_3.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(
+  df[df$Value != "Private_Write" &
+  df$Value != "Shared_Write" &
+  df$ResourceId >= 140152691697344 &
+  df$ResourceId <= 140737488351205,]) +
+  theme_bw() +
+  geom_segment(size=1, aes(x=Start,xend=End, y=ResourceId,yend=ResourceId, color=Value), alpha=.4) +
+  facet_wrap(~Value, ncol=1);
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/Moca_matrix_bloc_20160218Virt_filter_3.png]]
+
+That didn't work. Let's create a histogram:
+
+
+#+begin_src R :results output :session :exports both
+
+#+end_src
+
+
+#+begin_src R :results output graphics :file img/Moca_matrix_bloc_20160218Virt_ResourceId_histogram.png :exports both :width 600 :height 400 :session
+ggplot(df, aes(ResourceId)) + geom_histogram() + theme_bw();
+#+end_src
+
+#+RESULTS:
+[[file:img/Moca_matrix_bloc_20160218Virt_ResourceId_histogram.png]]
+
+Okay, let's zoom in:
+
+
+#+begin_src R :results output graphics :file img/Moca_matrix_bloc_20160218Virt_ResourceId_histogram_1.png :exports both :width 600 :height 400 :session
+ggplot(df, aes(ResourceId)) + geom_histogram() + theme_bw() + xlim(1.4073e+14,NA);
+#+end_src
+
+#+RESULTS:
+[[file:img/Moca_matrix_bloc_20160218Virt_ResourceId_histogram_1.png]]
+
+Okay, limits should be =xlim(1.4073e+14,NA)=.
+
+#+begin_src R :results output graphics :file img/Moca_matrix_bloc_20160218Virt_filter_4.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(
+  df[df$Value != "Private_Write" &
+  df$Value != "Shared_Write" &
+  df$ResourceId >= 1.4073e+14,]) +
+  theme_bw() +
+  geom_segment(size=1, aes(x=Start,xend=End, y=ResourceId,yend=ResourceId, color=Value), alpha=.4) +
+  facet_wrap(~Value, ncol=1);
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/Moca_matrix_bloc_20160218Virt_filter_4.png]]
+
+
+Now we are finally going somewhere. ResourceId filtering is essential.
+
+Let's go on, limiting the upper bound.
+
+#+begin_src R :results output graphics :file img/Moca_matrix_bloc_20160218Virt_filter_5.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(
+  df[df$Value != "Private_Write" &
+  df$Value != "Shared_Write" &
+  df$ResourceId >= 1.4073e+14 &
+  df$ResourceId <= 1.407374e+14,]) +
+  theme_bw() +
+  geom_segment(size=1, aes(x=Start,xend=End, y=ResourceId,yend=ResourceId, color=Value), alpha=.4) +
+  facet_wrap(~Value, ncol=1);
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/Moca_matrix_bloc_20160218Virt_filter_5.png]]
+
+Great. I stop here for now.
+
+The problem for me is to correctly define the Address bounds for the
+visualization. Since MOCA dumps really every single memory address
+accessed (no matter where), and we don't know which part we should
+look for, the prototype should allow an easy search methodology in the
+address space (pretty much following what I have done above, but
+automatically). Then, and only then, plot things.
+
+Some recomendations:
+- filter by memory address in MOCA (if intrusion is acceptable)
+- create a script to easily filter by memory address interval
+  - automatic address interval selection should be possible
+
+Future analysis methodology:
+- I am using alpha values to draw segments, but I shouldn't.
+  - Intensity should correlate with number of concurrent mem access.
+  - So, a preprocessing of the trace do the magic
+    - Take a look at [[*2016-02-17 Calculating intensity][2016-02-17 Calculating intensity]] to see how to
+  - Then plot as usual after all this filtering stuff mentioned above
