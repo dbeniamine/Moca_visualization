@@ -399,3 +399,40 @@ ggplot(h, aes(x=Start, y=N)) + geom_point();
 #+RESULTS:
 [[file:/tmp/babel-9357QOL/figure9357x8U.png]]
 
+* 2016-02-23 New traces
+
+I got a new tarbal from David, here's its MD5 signature.
+
+#+begin_src sh :results output :session :exports both
+md5sum ../Moca-matrix.tgz
+#+end_src
+
+#+RESULTS:
+: 7a81360ff13bcdd0cb3dc23e5b006805  ../Moca-matrix.tgz
+
+Extracting the data in the =v2= directory.
+
+#+begin_src sh :results output :session :exports both
+mkdir -p v2; cd v2; tar xfz ../../Moca-matrix.tgz; mv Moca-matrix-bloc/* .; rm -rf Moca-matrix-bloc;
+#+end_src
+
+#+RESULTS:
+
+List contents:
+
+#+begin_src sh :results output :session :exports both
+pwd
+ls -hl v2
+#+end_src
+
+#+RESULTS:
+: /home/schnorr/TRACES/david/Moca-matrix-bloc
+: total 1.1G
+: -rw-r--r-- 1 schnorr schnorr  126 Feb 17 10:54 matrix.stackmap.csv
+: -rw-r--r-- 1 schnorr schnorr  331 Feb 17 10:54 matrix.structs.csv
+: -rw-r--r-- 1 schnorr schnorr 317M Feb 18 13:31 Moca-framesoc.csv
+: -rw-r--r-- 1 schnorr schnorr  94M Feb 17 10:54 Moca-full-trace.csv
+: -rw-r--r-- 1 schnorr schnorr 351M Feb 18 14:01 Moca_matrix_bloc_20160218Virt.pjdump
+: -rw-r--r-- 1 schnorr schnorr 301M Feb 18 14:31 states
+
+Great, now we are ready to start again.
