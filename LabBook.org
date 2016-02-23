@@ -122,7 +122,6 @@ p
 [[file:img/phy_first_try_1.png]]
 
 
-
 * 2016-02-17 Calculating intensity
 
 _First Attempt_
@@ -436,3 +435,39 @@ ls -hl v2
 : -rw-r--r-- 1 schnorr schnorr 301M Feb 18 14:31 states
 
 Great, now we are ready to start again.
+
+* 2016-02-23 Playing with new traces
+
+It looks like I only get virtual mem addresses this time. Okay.
+
+#+begin_src sh :results output :session :exports both
+cd v2
+grep ^Variable Moca_matrix_bloc_20160218Virt.pjdump | 
+   awk -F, '{print "State,"$2",access,"$4","$5","$6",0,"$3}' > states_Virt.csv
+#+end_src
+
+#+RESULTS:
+
+I have noticed that some durations are negative. See:
+
+#+begin_src sh :results output :session :exports both
+cd v2
+cat states_Virt.csv | grep "-" | head
+#+end_src
+
+#+RESULTS:
+#+begin_example
+State,140737305567232,access,17863,17762,-101,0,Shared_Read
+State,140737305567232,access,17863,17762,-101,0,Shared_Read
+State,140737305569152,access,17863,17762,-101,0,Shared_Read
+State,140737305599152,access,17863,17762,-101,0,Shared_Read
+State,140737305599152,access,17863,17762,-101,0,Shared_Read
+State,140737305595904,access,17863,17762,-101,0,Shared_Read
+State,140737305611152,access,17863,17762,-101,0,Shared_Read
+State,140737305608192,access,17863,17762,-101,0,Shared_Read
+State,140737305623152,access,17863,17762,-101,0,Shared_Read
+State,140737305623152,access,17863,17762,-101,0,Shared_Read
+#+end_example
+
+_Summary_:
+- Negative durations (probably an error)
