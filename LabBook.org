@@ -472,7 +472,7 @@ State,140737305623152,access,17863,17762,-101,0,Shared_Read
 _Summary_:
 - Negative durations (probably an error)
 
-* 2016-02-23 Removing durations with negative values
+* 2016-02-23 Removing durations with negative values                  :Lucas:
 
 Okay, let's proceed anyway, removing the problem.
 
@@ -703,6 +703,7 @@ look for, the prototype should allow an easy search methodology in the
 address space (pretty much following what I have done above, but
 automatically). Then, and only then, plot things.
 
+
 Some recomendations:
 - filter by memory address in MOCA (if intrusion is acceptable)
 - create a script to easily filter by memory address interval
@@ -714,3 +715,27 @@ Future analysis methodology:
   - So, a preprocessing of the trace do the magic
     - Take a look at [[*2016-02-17 Calculating intensity][2016-02-17 Calculating intensity]] to see how to
   - Then plot as usual after all this filtering stuff mentioned above
+
+** Answers                                                            :David:
+- The filtering on the address space can be done using the structs.csv and stackmaps.csv
+that provides addresses, name and size of the various data structures
+and stacks. 
+In Ocelotl, I usually filter out all the addresses that are not in a
+data structure at import time. Still it can be interesting to do it
+during the preprocessing phase.
+Sadly I realized yesterday that Pin (the tool that I am using to
+record data structure addresses) was providing bad addresses, thus the
+filter won't work this the trace version two.
+This issue is not yet completly fixed but there is a trace with
+manually fixed data structure addresses and with the address space
+already reduced to data structures:
+ https://ligcloud.imag.fr/public.php?service=files&t=13b4b28b657943bdf7c4d31d6a7a18ba
+- The idea of Moca is to provide a trace as precise as possible, we don't know a priori what
+we are looking for, thus I'd rather avoid filtering during tracing.
+- The preprocessing can also be done when we detect sharing, currently when I dectect that
+two threads are sharing a page, I create to different accesses. I
+could create only one access to the page with a value of two. Still
+with this reprensentation, we only now the address of the shared page
+and loose the precise addresses of each accesses.
+
+
