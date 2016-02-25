@@ -716,7 +716,7 @@ Future analysis methodology:
     - Take a look at [[*2016-02-17 Calculating intensity][2016-02-17 Calculating intensity]] to see how to
   - Then plot as usual after all this filtering stuff mentioned above
 
-** Answers                                                            :David:
+* 2016-02-24 Answers for questions of previous section                :David:
 - The filtering on the address space can be done using the structs.csv and stackmaps.csv
 that provides addresses, name and size of the various data structures
 and stacks. 
