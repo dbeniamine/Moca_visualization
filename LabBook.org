@@ -1088,3 +1088,25 @@ p
 [[file:img/intensity_fixaddr_with_structure_v2.png]]
 
 That's great.
+
+Using color as factor.
+
+#+begin_src R :results output graphics :file img/intensity_fixaddr_with_structure_v3.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(m) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(N))) +
+  facet_grid(Structure~Value, scales="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_fixaddr_with_structure_v3.png]]
+
+
+Strange. It is either one or two accesses only.
+
+Is that normal for this application?
