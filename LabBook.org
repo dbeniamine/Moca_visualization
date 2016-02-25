@@ -738,4 +738,269 @@ could create only one access to the page with a value of two. Still
 with this reprensentation, we only now the address of the shared page
 and loose the precise addresses of each accesses.
 
+* 2016-02-25 New trace / Redo analysis / Try to be faster in filtering :Lucas:
+
+I have been provided with a new trace.
+
+#+begin_src sh :results output :session :exports both
+md5sum matrix.tgz
+#+end_src
+
+#+RESULTS:
+: 098f7ee5632a20cf82290737e89c3ad2  matrix.tgz
+
+#+begin_src sh :results output :session :exports both
+tar xfz matrix.tgz
+#+end_src
+
+#+RESULTS:
+
+#+begin_src sh :results output :session :exports both
+ls -1 Moca-matrix-bloc-fixaddr/
+#+end_src
+
+#+RESULTS:
+: matrix.stackmap.csv
+: matrix.structs.csv
+: Moca-framesoc.csv
+: Moca_matrix_bloc_fixaddr_20160222_144532_CET_Physical_6.pjdump
+: Moca_matrix_bloc_fixaddr_20160223_172342_CET_Physical_6.pjdump
+: Moca_matrix_bloc_fixaddr_20160223_172342_CET_Virtual_7.pjdump
+
+David told me the file =matrix.structs.csv= has information about the
+memory addresses of main data structures, the ones I should be looking
+for. Here's the contents:
+
+#+begin_src sh :results output :session :exports both
+cat Moca-matrix-bloc-fixaddr/matrix.structs.csv
+#+end_src
+
+#+RESULTS:
+: name,start,sz
+: __GI___pthread_keys,2196192,16384
+: __pthread_keys,2196192,16384
+: UnnamedStruct#0,6303760,5280
+: UnnamedStruct#1,6303888,32816
+: UnnamedStruct#2,6303888,32816
+: /tmp/matrix/matrix_naif.c:122,140737323565072,18000000
+: /tmp/matrix/matrix_naif.c:123,140737305563152,18000000
+: /tmp/matrix/matrix_naif.c:123,140737287561232,18000000
+
+Great, let's focus our analysis below in addresses starting at
+- 140737305563152 up to 140737305563152+18000000
+
+First, convert to =states=, using bash.
+
+#+begin_src sh :results output :session :exports both
+UNIQFILE=Moca_matrix_bloc_fixaddr_20160223_172342_CET_Virtual_7
+cat Moca-matrix-bloc-fixaddr/${UNIQFILE}.pjdump | grep ^Variable |
+   awk -F, '{print "State,"$2",access,"$4","$5","$6",0,"$3}' > ${UNIQFILE}-states.csv
+#+end_src
+
+#+RESULTS:
+
+Now, calculate intensity as in:
+- [[*2016-02-17 Calculating intensity][2016-02-17 Calculating intensity]]
+
+#+begin_src R :results output :session :exports both
+k <- read.csv("Moca_matrix_bloc_fixaddr_20160223_172342_CET_Virtual_7-states.csv", header=FALSE);
+options("scipen"=100, "digits"=4);
+head(k);
+#+end_src
+
+#+RESULTS:
+:      V1      V2     V3 V4   V5   V6 V7            V8
+: 1 State 4656816 access  1 4399 4398  0  Private_Read
+: 2 State 6303500 access  1 4399 4398  0  Private_Read
+: 3 State 6303500 access  1 4399 4398  0 Private_Write
+: 4 State 6303752 access  1 4399 4398  0  Private_Read
+: 5 State 6303752 access  1 4399 4398  0 Private_Write
+: 6 State 7330440 access  1 4399 4398  0  Private_Read
+
+#+begin_src R :results output :session :exports both
+sapply(k, class);
+#+end_src
+
+#+RESULTS:
+:        V1        V2        V3        V4        V5        V6        V7        V8 
+:  "factor" "numeric"  "factor" "integer" "integer" "integer" "integer"  "factor"
+
+#+begin_src R :results output :session :exports both
+names(k) <- c("Nature", "Address", "Type", "Start", "End", "Duration", "Imbric", "Value");
+k$Nature <- NULL;
+k$Type <- NULL;
+k$Imbric <- NULL;
+head(k);
+#+end_src
+
+#+RESULTS:
+:   Address Start  End Duration         Value
+: 1 4656816     1 4399     4398  Private_Read
+: 2 6303500     1 4399     4398  Private_Read
+: 3 6303500     1 4399     4398 Private_Write
+: 4 6303752     1 4399     4398  Private_Read
+: 5 6303752     1 4399     4398 Private_Write
+: 6 7330440     1 4399     4398  Private_Read
+
+#+begin_src R :results output :session :exports both
+sapply(k, class);
+#+end_src
+
+#+RESULTS:
+:   Address     Start       End  Duration     Value 
+: "numeric" "integer" "integer" "integer"  "factor"
+
+Do the magic. This command takes time.
+
+#+begin_src R :results output :session :exports both
+library(plyr);
+g <- ddply(k, .(Address, Start, End, Duration, Value), summarize, N=length(Value));
+head(g);
+#+end_src
+
+*Attention*: I aborted the command above since I was waiting for too long.
+
+Let's try again with dplyr.
+
+#+begin_src R :results output :session :exports both
+library(dplyr);
+#+end_src
+
+#+RESULTS:
+#+begin_example
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+#+end_example
+
+See this introduction to _dplyr_ (specially tthe section on chaining):
+https://cran.rstudio.com/web/packages/dplyr/vignettes/introduction.html
+
+Okay, let's write new code:
+
+#+begin_src R :results output :session :exports both
+g <- k %>%
+       group_by(Address, Start, End, Duration, Value) %>%
+       summarize(N = length(Value));
+#+end_src
+
+#+RESULTS:
+
+It was fast (I think around a minute in my machine).
+
+#+begin_src R :results output :session :exports both
+nrow(g);
+head(g);
+#+end_src
+
+#+RESULTS:
+#+begin_example
+[1] 3368394
+Source: local data frame [6 x 6]
+Groups: Address, Start, End, Duration
+
+  Address   Start     End Duration         Value N
+1 4194928 1700510 1729918    29408  Private_Read 1
+2 4197248   14887   17767     2880  Private_Read 1
+3 4656816       1    4399     4398  Private_Read 1
+4 6303496   14887   17767     2880  Private_Read 1
+5 6303500       1    4399     4398  Private_Read 1
+6 6303500       1    4399     4398 Private_Write 1
+#+end_example
+
+Filter out the space address:
+- 140737305563152 up to 140737305563152+18000000
+
+#+begin_src R :results output :session :exports both
+head(g[g$Address >= 140737305563152 & g$Address <= 140737305563152+18000000,]);
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Source: local data frame [6 x 6]
+Groups: Address, Start, End, Duration
+
+          Address Start   End Duration         Value N
+1 140737305563152  4400  9932     5532  Private_Read 1
+2 140737305563152  4400  9932     5532 Private_Write 1
+3 140737305563152 17734 17757       23  Private_Read 1
+4 140737305563152 17757 20391     2634   Shared_Read 2
+5 140737305563152 20391 27232     6841  Private_Read 1
+6 140737305563152 27232 32008     4776   Shared_Read 2
+#+end_example
+
+It worked, but it was a little slow. Let's also use =dplyr=.
+
+#+begin_src R :results output :session :exports both
+h <- g %>% filter(Address >= 140737305563152 & Address <= 140737305563152+18000000);
+#+end_src
+
+#+RESULTS:
+
+My feeling is that it was slower.
+
+#+begin_src R :results output :session :exports both
+head(h);
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Source: local data frame [6 x 6]
+Groups: Address, Start, End, Duration
+
+          Address Start   End Duration         Value N
+1 140737305563152  4400  9932     5532  Private_Read 1
+2 140737305563152  4400  9932     5532 Private_Write 1
+3 140737305563152 17734 17757       23  Private_Read 1
+4 140737305563152 17757 20391     2634   Shared_Read 2
+5 140737305563152 20391 27232     6841  Private_Read 1
+6 140737305563152 27232 32008     4776   Shared_Read 2
+#+end_example
+
+Let's plot the intensity of =h= anyway:
+
+
+#+begin_src R :results output graphics :file img/intensity_fixaddr_v1.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(h) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=N)) +
+  facet_wrap(~Value, ncol=1);
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_fixaddr_v1.png]]
+
+That's precise.
+
+* 2016-02-25 Merge access information with data structure information :Lucas:
+
+Let's look to another data structure, ow, much better, let's change
+our data frame to contain such information.
+
+#+begin_src R :results output :session :exports both
+head(g);
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Source: local data frame [6 x 6]
+Groups: Address, Start, End, Duration
+
+  Address   Start     End Duration         Value N
+1 4194928 1700510 1729918    29408  Private_Read 1
+2 4197248   14887   17767     2880  Private_Read 1
+3 4656816       1    4399     4398  Private_Read 1
+4 6303496   14887   17767     2880  Private_Read 1
+5 6303500       1    4399     4398  Private_Read 1
+6 6303500       1    4399     4398 Private_Write 1
+#+end_example
 
