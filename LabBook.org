@@ -1111,7 +1111,7 @@ Strange. It is either one or two accesses only.
 
 Is that normal for this application?
 
-* 2016-02-25  Answer to questions of previous section                 :David:
+* 2016-02-25 Answer to questions of previous section                  :David:
 
 The last image start to be quite interesting but there are several
 issues:
