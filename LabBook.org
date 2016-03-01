@@ -1980,6 +1980,14 @@ So I guess we have a visualisation from which we can start to see
 things, the next step is to look at some other application and try to
 do some improvements. We also should fix the number of addresses
 issue.
+* 2016-03-01 MOCA availability                                        :Lucas:
+
+David just told me that MOCA is available here:
+- https://github.com/dbeniamine/MOCA
+
+The scripts to replay previous sections are there:
+- https://github.com/dbeniamine/MOCA/blob/master/src/utils/create_event_producer.sh
+- https://github.com/dbeniamine/MOCA/blob/master/src/utils/framesoc_parser.pl
 
 * 2016-03-01 Can we go deeper ?                                       :David:
 
@@ -2459,7 +2467,6 @@ http://dbeniamine.github.io/Tabarnac/examples/is.B-modif.html
 
 Also we are looking to a class A version of IS, for tabarnac we used a
 class B, maybe it could help to work on a bigger version.
-
 
 
 *** TODO Class B
