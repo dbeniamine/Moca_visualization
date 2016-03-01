@@ -1980,3 +1980,489 @@ So I guess we have a visualisation from which we can start to see
 things, the next step is to look at some other application and try to
 do some improvements. We also should fix the number of addresses
 issue.
+
+* 2016-03-01 Can we go deeper ?                                       :David:
+
+** Continue previous analysis
+
+Let's restart were we stopped yesterday:
+
+#+begin_src R :results output :session :exports both
+computeType <- function(df){
+  shared <-9
+  write <- 4
+  if(df[shared] >= 2){
+    mytype <- "Shared"
+  }else{
+    mytype <- "Private"
+  }
+  if(df[write] >= 1){
+     mytype <- paste(mytype,"Write" , sep="_")
+  }else{
+     mytype <- paste(mytype,"Read" , sep="_")
+  }
+  return(mytype)
+}
+
+k <- read.csv("Moca-matrix-modulo-2016-02-29_11-14-03/Moca-framesoc.csv", header=T);
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+k$Value <- apply(k,1,computeType)
+k$Address <- sprintf("%f", as.numeric(paste("0x", k$Address, sep="")))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Tid <- NULL;
+k$Reads <- NULL ;
+k$Writes <- NULL ;
+k$Duration <- k$End - k$Start
+head(k);
+
+g <- k
+structs <- read.csv("Moca-matrix-modulo-2016-02-29_11-14-03/matrix.structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize");
+structs$AddressEnd = structs$AddressStart + structs$AddressSize;
+
+library(sqldf);
+m <- sqldf("SELECT g.Address, g.Start, g.End, g.Duration, g.Value, g.N, structs.Structure
+            FROM g
+            INNER JOIN structs
+            ON (g.Address >= structs.AddressStart) AND (g.Address <= structs.AddressEnd)");
+head(m);
+#+end_src
+
+ #+RESULTS:
+ #+begin_example
+             X.Virt            X.Phy Nreads Nwrites  CPUMask Start    End TaskId
+ 1 0000000000400040 00006200028a0630      1       0    10110     1   3492      0
+ 2 0000000000400a18 00006200028a0630      1       0    10110  5923   7920      0
+ 3 0000000000400c20 00006200028a0630      1       0   100110  7927  24611      2
+ 4 0000000000400270 0000000000400270      1       0 10000110 94264  94505      2
+ 5 0000000000400270 0000000000400270      1       0 10000110 94505 108267      2
+ 6 0000000000400270 0000000000400270      1       0  1000110 94505 108267      3
+   Shared
+ 1      1
+ 2      1
+ 3      1
+ 4      1
+ 5      2
+ 6      2
+    X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+  "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+    Shared 
+ "integer"
+          Address Start    End N        Value Duration
+ 1 4194368.000000     1   3492 1 Private_Read     3491
+ 2 4196888.000000  5923   7920 1 Private_Read     1997
+ 3 4197408.000000  7927  24611 1 Private_Read    16684
+ 4 4194928.000000 94264  94505 1 Private_Read      241
+ 5 4194928.000000 94505 108267 2  Shared_Read    13762
+ 6 4194928.000000 94505 108267 2  Shared_Read    13762
+          Address Start   End Duration        Value N       Structure
+ 1 6304392.000000  5923  7920     1997 Private_Read 1 UnnamedStruct#0
+ 2 6304392.000000  5923  7920     1997 Private_Read 1 UnnamedStruct#1
+ 3 6304392.000000  5923  7920     1997 Private_Read 1 UnnamedStruct#2
+ 4 6304472.000000  7921 10085     2164 Private_Read 1 UnnamedStruct#0
+ 5 6304472.000000  7921 10085     2164 Private_Read 1 UnnamedStruct#1
+ 6 6304472.000000  7921 10085     2164 Private_Read 1 UnnamedStruct#2
+#+end_example
+
+Before doing the plot we'd like to focus on some data structures:
+
+#+begin_src R :results output :session :exports both
+head(m)
+n <- m[grepl("matrix",m$Structure),]
+head(n)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+         Address Start   End Duration        Value N       Structure
+1 6304392.000000  5923  7920     1997 Private_Read 1 UnnamedStruct#0
+2 6304392.000000  5923  7920     1997 Private_Read 1 UnnamedStruct#1
+3 6304392.000000  5923  7920     1997 Private_Read 1 UnnamedStruct#2
+4 6304472.000000  7921 10085     2164 Private_Read 1 UnnamedStruct#0
+5 6304472.000000  7921 10085     2164 Private_Read 1 UnnamedStruct#1
+6 6304472.000000  7921 10085     2164 Private_Read 1 UnnamedStruct#2
+                  Address Start   End Duration         Value N
+19 140737313341456.000000  5923  7920     1997 Private_Write 1
+20 140737313341464.000000  7927 24611    16684  Private_Read 1
+21 140737313345536.000000     1  3492     3491 Private_Write 1
+22 140737313345536.000000  5923  7920     1997 Private_Write 1
+23 140737313345560.000000  7927  7998       71  Private_Read 1
+24 140737313345560.000000  7998 10000     2002   Shared_Read 2
+                                         Structure
+19 /home/david/Work/Bench/matrix/matrix_naif.c:140
+20 /home/david/Work/Bench/matrix/matrix_naif.c:140
+21 /home/david/Work/Bench/matrix/matrix_naif.c:140
+22 /home/david/Work/Bench/matrix/matrix_naif.c:140
+23 /home/david/Work/Bench/matrix/matrix_naif.c:140
+24 /home/david/Work/Bench/matrix/matrix_naif.c:140
+#+end_example
+
+#+begin_src R :results output graphics :file img/intensity_modulo_threads_zoom.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(n) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(N))) +
+  facet_grid(Structure~Value, scales="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_modulo_threads_zoom.png]]
+
+
+It's a bit better, let's zoom in the middle data structure
+
+#+begin_src R :results output graphics :file img/intensity_modulo_threads_zoom.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+o <- n[grepl(".c:123",m$Structure),]
+p <- ggplot(o) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(N))) +
+  facet_grid(~Value, scales="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_modulo_threads_zoom.png]]
+
+
+Well we don't see much more things, but It doesn't matter I think the
+visualization is already quite usefull, let's try to work on some
+other traces.
+
+** IS
+
+*** DONE First look
+- State "DONE"       from "TODO"       [2016-03-01 Tue 11:26]
+- State "TODO"       from              [2016-03-01 Tue 11:26]
+
+IS in one of the NAS paralell benchmark, we saw a particularly
+interesting pattern with TABARNAC: all the thread were accessing a
+data structure with a Gaussian distribution. In other words each page
+of the structure were accessed by each threads and more a page was in
+the middle of the structure, more it was accessed.
+
+Let see if we can see this with Moca traces:
+
+TODO: add link to archive
+
+#+begin_src sh :results output :exports both :session
+DIR=Moca-is.A-2016-02-26_16-29-49
+MOCAPATH=~/Work/Moca
+cd $DIR
+$MOCAPATH/src/utils/create_event_producer.sh 4096 Moca-full-trace.csv
+head Moca-framesoc.csv
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Generating producer files
+Generating framesoc trace file
+Generating Virtual producers file
+Generating Physical producers file
+Virtual-producers.log Done
+Physical-producers.log Done
+Reading from Moca-full-trace.csv
+48577 accesses on 17022 pages parsed from Moca-full-trace.csv
+done in 00 h 00 min 02.225 sec
+@Virt,@Phy,Nreads,Nwrites,CPUMask,Start,End,TaskId,Shared
+0000000000400040,000062000b08fa48,1,0,000001011,1,157,0,1
+0000000000400040,000062000b08fa48,1,0,000001011,157,2825,0,2
+0000000000400848,000062000b08fa48,1,0,000010011,157,2825,3,2
+0000000000400848,000062000b08fa48,1,0,000010011,2825,5603,3,1
+0000000000400848,000062000b08fa48,1,0,000010011,5603,8610,3,2
+00000000004002a8,000062000b08fa48,1,0,000001011,5603,8610,0,2
+0000000000400848,000062000b08fa48,1,0,000010011,8610,8616,3,1
+0000000000400848,000062000b08fa48,1,0,000010011,8616,20399,3,2
+0000000000400bd4,000062000b08fa48,1,0,000001011,8616,20399,0,2
+#+end_example
+
+#+begin_src sh :results output :exports both :session
+DIR=Moca-is.A-2016-02-26_16-29-49
+awk -F , 'BEGIN{p="";cpt=1} {if(p==$1){n=$1"-"cpt;cpt++}\
+else{cpt=1;n=$1};p=$1;print n","$2","$3}' \
+$DIR/is.A.structs.csv > $DIR/is.A.structs-uniq.csv
+cat  $DIR/is.A.structs-uniq.csv
+#+end_src
+
+#+RESULTS:
+#+begin_example
+-1,,
+__GI___pthread_keys,2196192,16384
+__pthread_keys,2196192,16384
+key_buff1,6305024,2097152
+key_array,8402176,33554432
+key_buff2,41956608,33554432
+UnnamedStruct#2,75513872,32816
+/tmp/NPB3.3-OMP/IS/is.c:494,75519344,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-1,75523456,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-2,75527568,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-3,75531680,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-4,75535792,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-5,75539904,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-6,75544016,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-7,75548128,4096
+#+end_example
+
+Hum it looks like there are a lot of data structures with the same
+name here, it's gona be a mess to understand which one is which ...
+
+#+begin_src R :results output :session :exports both
+computeType <- function(df){
+  shared <-9
+  write <- 4
+  if(df[shared] >= 2){
+    mytype <- "Shared"
+  }else{
+    mytype <- "Private"
+  }
+  if(df[write] >= 1){
+     mytype <- paste(mytype,"Write" , sep="_")
+  }else{
+     mytype <- paste(mytype,"Read" , sep="_")
+  }
+  return(mytype)
+}
+
+k <- read.csv("Moca-is.A-2016-02-26_16-29-49/Moca-framesoc.csv", header=T);
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+k$Value <- apply(k,1,computeType)
+k$Address <- sprintf("%f", as.numeric(paste("0x", k$Address, sep="")))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Tid <- NULL;
+#k$Reads <- NULL ;
+#k$Writes <- NULL ;
+k$Duration <- k$End - k$Start
+head(k);
+
+g <- k
+structs <- read.csv("Moca-is.A-2016-02-26_16-29-49/is.A.structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize");
+structs$AddressEnd = structs$AddressStart + structs$AddressSize;
+
+library(sqldf);
+m <- sqldf("SELECT g.Address, g.Start, g.End, g.Duration, g.Value, g.Reads, g.Writes, g.N, structs.Structure
+            FROM g
+            INNER JOIN structs
+            ON (g.Address >= structs.AddressStart) AND (g.Address <= structs.AddressEnd)");
+head(m);
+#+end_src
+
+#+RESULTS:
+#+begin_example
+            X.Virt            X.Phy Nreads Nwrites CPUMask Start  End TaskId
+1 0000000000400040 000062000b08fa48      1       0    1011     1  157      0
+2 0000000000400040 000062000b08fa48      1       0    1011   157 2825      0
+3 0000000000400848 000062000b08fa48      1       0   10011   157 2825      3
+4 0000000000400848 000062000b08fa48      1       0   10011  2825 5603      3
+5 0000000000400848 000062000b08fa48      1       0   10011  5603 8610      3
+6 00000000004002a8 000062000b08fa48      1       0    1011  5603 8610      0
+  Shared
+1      1
+2      2
+3      2
+4      1
+5      2
+6      2
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+         Address Reads Writes Start  End N        Value Duration
+1 4194368.000000     1      0     1  157 1 Private_Read      156
+2 4194368.000000     1      0   157 2825 2  Shared_Read     2668
+3 4196424.000000     1      0   157 2825 2  Shared_Read     2668
+4 4196424.000000     1      0  2825 5603 1 Private_Read     2778
+5 4196424.000000     1      0  5603 8610 2  Shared_Read     3007
+6 4194984.000000     1      0  5603 8610 2  Shared_Read     3007
+         Address Start   End Duration         Value Reads Writes N Structure
+1 6311168.000000   157   163        6 Private_Write     1      1 1 key_buff1
+2 6311168.000000   163 11652    11489  Shared_Write     1      1 2 key_buff1
+3 6309120.000000   163 11652    11489  Shared_Write     1      1 2 key_buff1
+4 6311168.000000 11652 21776    10124  Shared_Write     1      1 3 key_buff1
+5 6309120.000000 11652 21776    10124  Shared_Write     1      1 3 key_buff1
+6 6309120.000000 11652 21776    10124  Shared_Write     1      1 3 key_buff1
+#+end_example
+
+
+#+begin_src R :results output graphics :file img/intensity_is_threads.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(m) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(N))) +
+  facet_grid(Structure~Value, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_is_threads.png]]
+
+
+
+ Woh there is a lot of data structures here, most of the accesses
+ seems to be on the three first, let's do a plot similar to:
+[[*Importance of data structures][Importance of data structures]]
+
+#+begin_src R :results output :session :exports both
+library(plyr)
+n <- ddply(m,c("Structure"),summarize,Reads=sum(Reads), Writes=sum(Writes));
+o <- n
+o$Writes <- NULL
+o$Type <- rep("Read", nrow(o))
+names(o) <- c("Structure", "N", "Type")
+q <- n
+q$Reads <- NULL
+q$Type <- rep("Write", nrow(o))
+names(q) <- c("Structure", "N", "Type")
+q <- rbind(q,o)
+head(q)
+#+end_src
+
+#+RESULTS:
+:                       Structure     N  Type
+: 1                     key_array  8194 Write
+: 2                     key_buff1 49647 Write
+: 3                     key_buff2 36940 Write
+: 4   /tmp/NPB3.3-OMP/IS/is.c:494     1 Write
+: 5 /tmp/NPB3.3-OMP/IS/is.c:494-1     7 Write
+: 6 /tmp/NPB3.3-OMP/IS/is.c:494-2     2 Write
+
+Hum we don't have the number of accesses information anymore here
+
+#+begin_src R :results output graphics :file img/struct_importance_is.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q,aes(x=Structure,y=N, fill=Type)) +
+  theme_bw() +
+  geom_bar(stat="identity")
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/struct_importance_is.png]]
+
+
+Ok we can clearly focus on the first three data structures. BTW this
+version of the plot is more compelete than the previous, it is nice to
+see the read / write ratio.
+
+#+begin_src R :results output graphics :file img/intensity_is_threads_zoom.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+r <- m[grepl("key_", m$Structure),]
+p <- ggplot(r) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(N))) +
+  facet_grid(Structure~Value, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_is_threads_zoom.png]]
+
+
+- So we see that keybuff1 is shared in write mode
+  - At the beginning it's is shared by 2 or 3 threads, but when it the
+    number of threads increase with the time
+  - It seems that the addresses in the middle are accessed by more
+    threads than the other, but it's not as obvious as in Tabarnac. We
+    shoul try to plot the number of accesses per addresses.
+- key buff1 seems to never be read, I guess we always do something
+  like  keybuff1[i]++ that triggers a read and a write.
+- The read write pattern of key array is quite fun: basicely we never
+  re write anything, which is not the case for the two other data
+  structure. This information could be used to replicate the data
+  structure if needed.
+  
+#+begin_src R :results output graphics :file img/intensity_is_threads_zoom_nacc.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(r) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(Reads+Writes))) +
+  facet_grid(Structure~Value, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_is_threads_zoom_nacc.png]]
+
+The number of accesses for writes are higher than for reads, it is an
+artifacts as a write access always contains also a read.
+
+I'm a bit disapointed here, I thought I will see the fact that the
+middle addreses of keybuff1 are more accessed ...
+
+What if we remove the facet on the type of access
+
+#+begin_src R :results output graphics :file img/intensity_is_threads_zoom_nacc2.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(r) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(Reads+Writes))) +
+  facet_grid(Structure~., scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_is_threads_zoom_nacc2.png]]
+
+
+Well  he we can only say that keybuff1 have more accesses at the same
+time than the two other structures, but we still can't see this gaussian
+
+I'll just check that the trace is indeed the original version of is,
+(If yes the result of the following line should be Macros: DYN).
+
+#+begin_src sh :results output :exports both
+grep Macros Moca-is.A-2016-02-26_16-29-49/Moca-is.A.log
+#+end_src
+
+#+RESULTS:
+: Macros:	DYN
+
+It looks fine, I should compare these plots to the modified version of
+IS, and see what happens ...
+For reminder Tabarnac IS visualisation are available here:
+http://dbeniamine.github.io/Tabarnac/examples/is.B-original.html
+and
+http://dbeniamine.github.io/Tabarnac/examples/is.B-modif.html
+
+Also we are looking to a class A version of IS, for tabarnac we used a
+class B, maybe it could help to work on a bigger version.
+
+
+
+*** TODO Class B
+- State "TODO"       from              [2016-03-01 Tue 11:26]
+*** TODO Compare with modified trace
+- State "TODO"       from              [2016-03-01 Tue 11:26]
