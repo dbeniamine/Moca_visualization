@@ -2472,7 +2472,6 @@ http://dbeniamine.github.io/Tabarnac/examples/is.B-modif.html
 Also we are looking to a class A version of IS, for tabarnac we used a
 class B, maybe it could help to work on a bigger version.
 
-
 *** DONE Class B
 - State "DONE"       from "STARTED"    [2016-03-01 Tue 14:55]
 - State "STARTED"    from "TODO"       [2016-03-01 Tue 14:11]
@@ -2805,7 +2804,10 @@ Maybe it is harder to see such behavior over the time ...
 So next step, compare these results to the modified version, maybe we
 will be able to see something.
 
-*** TODO Compare with modified trace
+*** DONE Compare with modified trace
+- State "DONE"       from "STARTED"    [2016-03-01 Tue 16:11]
+- State "STARTED"    from "DONE"       [2016-03-01 Tue 16:09]
+- State "DONE"       from "TODO"       [2016-03-01 Tue 15:19]
 - State "TODO"       from              [2016-03-01 Tue 11:26]
 
 Let's do this analysis one more time but with the modified version:
@@ -2987,5 +2989,437 @@ Original verion here:
 
 I think the difference betweens these plots are quite similar to the
 difference betwen the plots showing the intensity en terms of
-threads, I guess it means that they are two similar. I'd really like
+threads, I guess it means that they are too similar. I'd really like
 to see something like tabarnac's plot but over the time...
+
+Maybe we should first do some plot similar to Tabarnac's ones without
+time. It will tell us two different things: first if we have enough
+information in Moca traces to see these behavior. The second thing is
+that maybe, when we visualize the accesses over the time, we can't see
+the differences because they are only significant when we sum
+everything up.
+
+
+*** TODO Tabarnac like plots wth Moca traces
+- State "TODO"       from              [2016-03-01 Tue 15:21]
+
+  
+We restart from the original trace, but we keep the Tid in the dataframe:
+
+#+begin_src R :results output :session :exports both
+computeType <- function(df){
+  shared <-9
+  write <- 4
+  if(df[shared] >= 2){
+    mytype <- "Shared"
+  }else{
+    mytype <- "Private"
+  }
+  if(df[write] >= 1){
+     mytype <- paste(mytype,"Write" , sep="_")
+  }else{
+     mytype <- paste(mytype,"Read" , sep="_")
+  }
+  return(mytype)
+}
+
+k <- read.csv("Moca-is.B-orig-2016-03-01_14-03-40/Moca-framesoc.csv", header=T);
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+k$Value <- apply(k,1,computeType)
+k$Address <- sprintf("%f", as.numeric(paste("0x", k$Address, sep="")))
+k$Phy <- NULL;
+k$CPU <- NULL;
+#k$Tid <- NULL;
+#k$Reads <- NULL ;
+#k$Writes <- NULL ;
+k$Duration <- k$End - k$Start
+head(k);
+
+g <- k
+structs <- read.csv("Moca-is.B-orig-2016-03-01_14-03-40/is.B-orig.structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize");
+structs$AddressEnd = structs$AddressStart + structs$AddressSize;
+
+library(sqldf);
+m <- sqldf("SELECT g.Address, g.Start, g.End, g.Duration, g.Value, g.Reads, g.Writes, g.Tid, g.N, structs.Structure
+            FROM g
+            INNER JOIN structs
+            ON (g.Address >= structs.AddressStart) AND (g.Address <= structs.AddressEnd)");
+head(m);
+#+end_src
+
+#+RESULTS:
+#+begin_example
+            X.Virt            X.Phy Nreads Nwrites CPUMask  Start    End TaskId
+1 0000000000400040 000062000b1dfa80      1       0    1011      1    171      0
+2 00000000004002a8 000062000b1dfa80      1       0    1011  32663  34153      0
+3 0000000000400bd4 000062000b1dfa80      1       0    1011  55271  72678      0
+4 00000000004009a0 000062000b1dfa80      1       0      11  88569  88776      1
+5 00000000004009a0 000062000b1dfa80      1       0     111  92562 103554      7
+6 00000000004009a0 000062000b1dfa80      1       0   10011 238634 245102      2
+  Shared
+1      1
+2      1
+3      1
+4      1
+5      1
+6      1
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+         Address Reads Writes  Start    End Tid N        Value Duration
+1 4194368.000000     1      0      1    171   0 1 Private_Read      170
+2 4194984.000000     1      0  32663  34153   0 1 Private_Read     1490
+3 4197332.000000     1      0  55271  72678   0 1 Private_Read    17407
+4 4196768.000000     1      0  88569  88776   1 1 Private_Read      207
+5 4196768.000000     1      0  92562 103554   7 1 Private_Read    10992
+6 4196768.000000     1      0 238634 245102   2 1 Private_Read     6468
+Loading required package: gsubfn
+Loading required package: proto
+Loading required package: RSQLite
+Loading required package: DBI
+ Loading required package: tcltk
+         Address  Start    End Duration         Value Reads Writes Tid N
+1 6307840.000000 279630 283344     3714 Private_Write     1      1   7 1
+2 6307840.000000 310398 410993   100595 Private_Write     1      1   6 1
+3 6307840.000000 452318 485570    33252 Private_Write     1      1   6 1
+4 6307840.000000 485572 511748    26176 Private_Write     1      1   6 1
+5 6307840.000000 511748 521080     9332  Shared_Write     1      1   6 2
+6 6307840.000000 511748 521080     9332  Shared_Write     1      1   0 2
+  Structure
+1 key_buff1
+2 key_buff1
+3 key_buff1
+4 key_buff1
+5 key_buff1
+6 key_buff1
+#+end_example
+
+Now we sum up the date to remove the temporal information.
+
+#+begin_src R :results output :session :exports both
+r <- m[grepl("key_",m$Structure),]
+r <- ddply(r, c("Address","Tid", "Structure"), summarize, N=sum(Reads)+sum(Writes))
+head(r) 
+#+end_src
+
+#+RESULTS:
+:            Address Tid Structure  N
+: 1 100000888.000000   6 key_array  4
+: 2 100003840.000000   3 key_array 11
+: 3 100007216.000000   6 key_array  4
+: 4 100007936.000000   3 key_array 11
+: 5 100009484.000000   6 key_array  4
+: 6 100012032.000000   3 key_array 11
+
+#+begin_src R :results output graphics :file img/tabarnac_is_b_orig.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+s <- r[grepl("key_buff1",r$Structure),]
+p <- ggplot(s) +
+  theme_bw() +
+  geom_point(aes(x=Address,y=Tid,color=N)) +
+  #facet_wrap(~Structure, ncol=1) +
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/tabarnac_is_b_orig.png]]
+
+Still hard to see anything, maybe we can group the number of accesses
+per pages:
+#+begin_src R :results output :session :exports both
+s <- r[grepl("key_",r$Structure),]
+#head(s)
+library(gmp)
+pageAddr <- function(df){
+    a <- as.bigz(gsub('\\..*', '', df[1]))
+    a <- a - mod.bigz(a,4096)*4096
+    return (as.character(a,b=10))
+}
+s$Page <- apply(s,1,pageAddr)
+head(s)
+t <- ddply(s,c("Page","Tid","Structure"), summarize, N=sum(N))
+head(t)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+
+Attaching package: ‘gmp’
+
+The following objects are masked from ‘package:base’:
+
+    %*%, apply, crossprod, matrix, tcrossprod
+           Address Tid Structure  N      Page
+1 100000888.000000   6 key_array  4  95315064
+2 100003840.000000   3 key_array 11 100003840
+3 100007216.000000   6 key_array  4  86179120
+4 100007936.000000   3 key_array 11 100007936
+5 100009484.000000   6 key_array  4  93668876
+6 100012032.000000   3 key_array 11 100012032
+       Page Tid Structure  N
+1 100003840   3 key_array 11
+2 100007936   3 key_array 11
+3 100012032   3 key_array 11
+4 100016128   3 key_array 11
+5 100020224   3 key_array 11
+6  10002432   0 key_buff1  4
+#+end_example
+
+#+begin_src R :results output graphics :file img/tabarnac_page_is_b_orig.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(t,aes(x=Page,y=Tid,color=N)) +
+  theme_bw() +
+  geom_point() +
+  facet_wrap(~Structure) +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/tabarnac_page_is_b_orig.png]]
+
+
+
+Still the same issue, we are not able to see any pattern.
+Maybe the issue is not in Moca traces, but in my R: the addresses used
+for plotting are stored as factor, because they are 64 bits integer
+and the numeric representation keeps only the high part of the
+addresses.
+Let see if I manage to plot something using the gmp library:
+
+#+begin_src R :results output :session :exports both
+library(gmp)
+head(t)
+str(t)
+t$PageB <- as.bigz(t$Page)
+head(t)
+str(t)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+       Page Tid Structure  N
+1 100003840   3 key_array 11
+2 100007936   3 key_array 11
+3 100012032   3 key_array 11
+4 100016128   3 key_array 11
+5 100020224   3 key_array 11
+6  10002432   0 key_buff1  4
+'data.frame':	337133 obs. of  4 variables:
+ $ Page     : chr  "100003840" "100007936" "100012032" "100016128" ...
+ $ Tid      : int  3 3 3 3 3 0 1 2 5 6 ...
+ $ Structure: Factor w/ 14 levels "__GI___pthread_keys",..: 2 2 2 2 2 3 3 3 3 3 ...
+ $ N        : int  11 11 11 11 11 4 2 4 4 4 ...
+       Page Tid Structure  N     PageB
+1 100003840   3 key_array 11 100003840
+2 100007936   3 key_array 11 100007936
+3 100012032   3 key_array 11 100012032
+4 100016128   3 key_array 11 100016128
+5 100020224   3 key_array 11 100020224
+6  10002432   0 key_buff1  4  10002432
+'data.frame':	337133 obs. of  5 variables:
+ $ Page     : chr  "100003840" "100007936" "100012032" "100016128" ...
+ $ Tid      : int  3 3 3 3 3 0 1 2 5 6 ...
+ $ Structure: Factor w/ 14 levels "__GI___pthread_keys",..: 2 2 2 2 2 3 3 3 3 3 ...
+ $ N        : int  11 11 11 11 11 4 2 4 4 4 ...
+ $ PageB    :Class 'bigz'  raw [1:4045600] ed 24 05 00 ...
+#+end_example
+
+Was it that easy ?
+
+#+begin_src R :results output graphics :file img/tabarnac_page_is_b_orig_bigz.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(t,aes(x=PageB,y=Tid,color=N)) +
+  theme_bw() +
+  geom_point() +
+  facet_wrap(~Structure) +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/tabarnac_page_is_b_orig_bigz.png]]
+
+Obviously it is not working we can try to unclass the dataframe, not
+sure how it works:
+
+#+begin_src R :results output graphics :file img/tabarnac_page_is_b_orig_bigz1.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(unclass(t),aes(x=PageB,y=Tid,color=N)) +
+  theme_bw() +
+  geom_point() +
+  facet_wrap(~Structure) +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/tabarnac_page_is_b_orig_bigz1.png]]
+
+That was a bad idea ...
+
+I think it will be simpler to affect to each page a number
+corresponding to it's delta in the structure:
+
+#+begin_src R :results output :session :exports both
+pageId <- function(df){
+    base <- as.bigz(structs[grepl(df[3],structs$Structure),]$AddressStart)
+    return(as.integer(as.character(df[5] - base)))
+}
+str(structs)
+head(t)
+t$PageI <- apply(t,1,pageId)
+head(t)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+'data.frame':	14 obs. of  4 variables:
+ $ Structure   : Factor w/ 14 levels "__GI___pthread_keys",..: 1 5 3 2 4 14 6 7 8 9 ...
+ $ AddressStart: int  2196192 2196192 6305024 14693632 148911360 283131920 283137392 283141504 283145616 283149728 ...
+ $ AddressSize : int  16384 16384 8388608 134217728 134217728 32816 4096 4096 4096 4096 ...
+ $ AddressEnd  : int  2212576 2212576 14693632 148911360 283129088 283164736 283141488 283145600 283149712 283153824 ...
+       Page Tid Structure  N     PageB
+1 100003840   3 key_array 11 100003840
+2 100007936   3 key_array 11 100007936
+3 100012032   3 key_array 11 100012032
+4 100016128   3 key_array 11 100016128
+5 100020224   3 key_array 11 100020224
+6  10002432   0 key_buff1  4  10002432
+       Page Tid Structure  N     PageB    PageI
+1 100003840   3 key_array 11 100003840 85310208
+2 100007936   3 key_array 11 100007936 85314304
+3 100012032   3 key_array 11 100012032 85318400
+4 100016128   3 key_array 11 100016128 85322496
+5 100020224   3 key_array 11 100020224 85326592
+6  10002432   0 key_buff1  4  10002432  3697408
+#+end_example
+
+
+#+begin_src R :results output graphics :file img/tabarnac_page_is_b_orig_int.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(t,aes(x=PageI,y=Tid,color=N)) +
+  theme_bw() +
+  geom_point() +
+  facet_wrap(~Structure) +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/tabarnac_page_is_b_orig_int.png]]
+
+
+
+We should plot data structure separatly, keybuff1 is so small we can't
+see anything:
+
+#+begin_src R :results output :session :exports both
+head(s)
+head(t)
+heat(t[grepl("key_buff1",t$Structure),],n=50)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+           Address Tid Structure  N      Page
+1 100000888.000000   6 key_array  4  95315064
+2 100003840.000000   3 key_array 11 100003840
+3 100007216.000000   6 key_array  4  86179120
+4 100007936.000000   3 key_array 11 100007936
+5 100009484.000000   6 key_array  4  93668876
+6 100012032.000000   3 key_array 11 100012032
+       Page Tid Structure  N     PageB    PageI
+1 100003840   3 key_array 11 100003840 85310208
+2 100007936   3 key_array 11 100007936 85314304
+3 100012032   3 key_array 11 100012032 85318400
+4 100016128   3 key_array 11 100016128 85322496
+5 100020224   3 key_array 11 100020224 85326592
+6  10002432   0 key_buff1  4  10002432  3697408
+        Page Tid Structure  N    PageB   PageI
+6   10002432   0 key_buff1  4 10002432 3697408
+7   10002432   1 key_buff1  2 10002432 3697408
+8   10002432   2 key_buff1  4 10002432 3697408
+9   10002432   5 key_buff1  4 10002432 3697408
+10  10002432   6 key_buff1  4 10002432 3697408
+24  10006528   0 key_buff1  2 10006528 3701504
+25  10006528   1 key_buff1  2 10006528 3701504
+26  10006528   4 key_buff1  6 10006528 3701504
+27  10006528   5 key_buff1  6 10006528 3701504
+28  10006528   6 key_buff1  6 10006528 3701504
+31  10007088   5 key_buff1  5 10007088 3702064
+43  10010624   1 key_buff1 10 10010624 3705600
+44  10010624   2 key_buff1  4 10010624 3705600
+45  10010624   3 key_buff1  8 10010624 3705600
+46  10010624   5 key_buff1  4 10010624 3705600
+47  10010624   6 key_buff1  4 10010624 3705600
+60  10014720   0 key_buff1  4 10014720 3709696
+61  10014720   1 key_buff1 10 10014720 3709696
+62  10014720   2 key_buff1  6 10014720 3709696
+63  10014720   3 key_buff1  8 10014720 3709696
+64  10014720   5 key_buff1  8 10014720 3709696
+65  10014720   6 key_buff1  4 10014720 3709696
+78  10018816   4 key_buff1  4 10018816 3713792
+79  10018816   5 key_buff1  2 10018816 3713792
+80  10018816   6 key_buff1  2 10018816 3713792
+81  10018816   7 key_buff1  6 10018816 3713792
+93  10022912   0 key_buff1  6 10022912 3717888
+94  10022912   1 key_buff1  4 10022912 3717888
+95  10022912   4 key_buff1  8 10022912 3717888
+96  10022912   5 key_buff1  8 10022912 3717888
+97  10022912   6 key_buff1  2 10022912 3717888
+98  10022912   7 key_buff1 16 10022912 3717888
+109 10027008   0 key_buff1  2 10027008 3721984
+110 10027008   1 key_buff1 10 10027008 3721984
+111 10027008   2 key_buff1  4 10027008 3721984
+112 10027008   6 key_buff1  4 10027008 3721984
+113 10027008   7 key_buff1 14 10027008 3721984
+126 10031104   0 key_buff1  2 10031104 3726080
+127 10031104   1 key_buff1 10 10031104 3726080
+128 10031104   7 key_buff1 20 10031104 3726080
+143 10035200   0 key_buff1  6 10035200 3730176
+144 10035200   2 key_buff1  4 10035200 3730176
+145 10035200   3 key_buff1  4 10035200 3730176
+146 10035200   6 key_buff1  2 10035200 3730176
+157 10039296   0 key_buff1  6 10039296 3734272
+158 10039296   2 key_buff1  4 10039296 3734272
+159 10039296   3 key_buff1  4 10039296 3734272
+160 10039296   6 key_buff1  2 10039296 3734272
+164 10040148   0 key_buff1  4 10040148 3735124
+174 10043392   0 key_buff1  2 10043392 3738368
+#+end_example
+
+
+#+begin_src R :results output graphics :file img/tabarnac_page_is_b_orig_int_kb1.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+u<-t[grepl("key_buff1",t$Structure),];
+p <- ggplot(u,aes(x=PageI,y=Tid,color=N)) +
+  theme_bw() +
+  geom_point() +
+  facet_wrap(~Structure) +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/tabarnac_page_is_b_orig_int_kb1.png]]
+
+
+There are some negative pageIds I don't know why, but it is late and
+I'm exhausted, I'll fix that tomorrow.
