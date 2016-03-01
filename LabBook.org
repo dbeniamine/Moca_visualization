@@ -2163,9 +2163,15 @@ data structure with a Gaussian distribution. In other words each page
 of the structure were accessed by each threads and more a page was in
 the middle of the structure, more it was accessed.
 
-Let see if we can see this with Moca traces:
+There is an archive to the IS trace:
+https://ligcloud.imag.fr/public.php?service=files&t=d724ad2c1c0c9b648eed5974cc736f58
 
-TODO: add link to archive
+#+begin_src sh :results output :exports both
+md5sum is-a-base.tgz
+#+end_src
+
+#+RESULTS:
+: a89f1719f4c4d0c68977f4fdcbba4712  is-a-base.tgz
 
 #+begin_src sh :results output :exports both :session
 DIR=Moca-is.A-2016-02-26_16-29-49
@@ -2358,8 +2364,6 @@ head(q)
 : 5 /tmp/NPB3.3-OMP/IS/is.c:494-1     7 Write
 : 6 /tmp/NPB3.3-OMP/IS/is.c:494-2     2 Write
 
-Hum we don't have the number of accesses information anymore here
-
 #+begin_src R :results output graphics :file img/struct_importance_is.png :exports both :width 600 :height 400 :session
 library(ggplot2);
 p <- ggplot(q,aes(x=Structure,y=N, fill=Type)) +
@@ -2469,7 +2473,337 @@ Also we are looking to a class A version of IS, for tabarnac we used a
 class B, maybe it could help to work on a bigger version.
 
 
-*** TODO Class B
+*** DONE Class B
+- State "DONE"       from "STARTED"    [2016-03-01 Tue 14:55]
+- State "STARTED"    from "TODO"       [2016-03-01 Tue 14:11]
 - State "TODO"       from              [2016-03-01 Tue 11:26]
+ 
+So I just generated three new is traces:
+- is.A-modif: Class A, modification from tabarnac paper (see
+  http://dbeniamine.github.io/Tabarnac/examples/ ).
+- is.B-orig: Class A, original version.
+- is.B-modif: Class B, modified.
+
+As usual, there is an archive on ligcloud:
+https://ligcloud.imag.fr/public.php?service=files&t=4e9547f6da887a6c8ebcca9dea4c159f
+
+#+begin_src sh :results output :exports both
+md5sum is-AB.tgz
+tar xvzf is-AB.tgz
+#+end_src
+
+#+RESULTS:
+#+begin_example
+a20fd83a6de147c13ac7d572f3d526b4  is-AB.tgz
+Moca-is.A-modif-2016-03-01_14-00-23/
+Moca-is.A-modif-2016-03-01_14-00-23/is.A-modif-stackmap.csv
+Moca-is.A-modif-2016-03-01_14-00-23/Moca-full-trace.csv
+Moca-is.A-modif-2016-03-01_14-00-23/Moca-output.log
+Moca-is.A-modif-2016-03-01_14-00-23/stacks.log
+Moca-is.A-modif-2016-03-01_14-00-23/Moca-is.A-modif.log
+Moca-is.A-modif-2016-03-01_14-00-23/temp_1760
+Moca-is.A-modif-2016-03-01_14-00-23/Moca-is.A-modif.log.err
+Moca-is.A-modif-2016-03-01_14-00-23/is.A-modif.structs.csv
+Moca-is.B-modif-2016-03-01_14-00-58/
+Moca-is.B-modif-2016-03-01_14-00-58/Moca-is.B-modif.log
+Moca-is.B-modif-2016-03-01_14-00-58/Moca-is.B-modif.log.err
+Moca-is.B-modif-2016-03-01_14-00-58/is.B-modif-stackmap.csv
+Moca-is.B-modif-2016-03-01_14-00-58/Moca-full-trace.csv
+Moca-is.B-modif-2016-03-01_14-00-58/Moca-output.log
+Moca-is.B-modif-2016-03-01_14-00-58/stacks.log
+Moca-is.B-modif-2016-03-01_14-00-58/is.B-modif.structs.csv
+Moca-is.B-modif-2016-03-01_14-00-58/temp_3266
+Moca-is.B-orig-2016-03-01_14-03-40/
+Moca-is.B-orig-2016-03-01_14-03-40/Moca-is.B-orig.log
+Moca-is.B-orig-2016-03-01_14-03-40/is.B-orig-stackmap.csv
+Moca-is.B-orig-2016-03-01_14-03-40/Moca-is.B-orig.log.err
+Moca-is.B-orig-2016-03-01_14-03-40/Moca-full-trace.csv
+Moca-is.B-orig-2016-03-01_14-03-40/Moca-output.log
+Moca-is.B-orig-2016-03-01_14-03-40/stacks.log
+Moca-is.B-orig-2016-03-01_14-03-40/is.B-orig.structs.csv
+Moca-is.B-orig-2016-03-01_14-03-40/temp_5417
+#+end_example
+
+We start with the original is.B trace, see if the patterns are more
+visible than on the class A, same analysis as [[*First look][above.]] 
+
+#+begin_src sh :results output :exports both :session
+DIR=Moca-is.B-orig-2016-03-01_14-03-40
+MOCAPATH=~/Work/Moca
+cd $DIR
+$MOCAPATH/src/utils/create_event_producer.sh 4096 Moca-full-trace.csv
+head Moca-framesoc.csv
+awk -F , 'BEGIN{p="";cpt=1} {if(p==$1){n=$1"-"cpt;cpt++}\
+else{cpt=1;n=$1};p=$1;print n","$2","$3}' \
+is.B-orig.structs.csv > is.B-orig.structs-uniq.csv
+cat  is.B-orig.structs-uniq.csv
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Generating producer files
+Generating framesoc trace file
+Generating Virtual producers file
+Generating Physical producers file
+Virtual-producers.log Done
+Physical-producers.log Done
+Reading from Moca-full-trace.csv
+770601 accesses on 67715 pages parsed from Moca-full-trace.csv
+done in 00 h 00 min 23.992 sec
+@Virt,@Phy,Nreads,Nwrites,CPUMask,Start,End,TaskId,Shared
+0000000000400040,000062000b1dfa80,1,0,000001011,1,171,0,1
+00000000004002a8,000062000b1dfa80,1,0,000001011,32663,34153,0,1
+0000000000400bd4,000062000b1dfa80,1,0,000001011,55271,72678,0,1
+00000000004009a0,000062000b1dfa80,1,0,000000011,88569,88776,1,1
+00000000004009a0,000062000b1dfa80,1,0,000000111,92562,103554,7,1
+00000000004009a0,000062000b1dfa80,1,0,000010011,238634,245102,2,1
+00000000004009a0,000062000b1dfa80,1,0,001000000,254421,258859,4,1
+00000000004009a0,000062000b1dfa80,1,0,001000000,258859,286485,4,2
+0000000000400990,000062000b1dfa80,1,0,010000000,258859,286485,6,2
+-1,,
+__GI___pthread_keys,2196192,16384
+__pthread_keys,2196192,16384
+key_buff1,6305024,8388608
+key_array,14693632,134217728
+key_buff2,148911360,134217728
+UnnamedStruct#2,283131920,32816
+/tmp/NPB3.3-OMP/IS/is.c:494,283137392,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-1,283141504,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-2,283145616,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-3,283149728,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-4,283153840,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-5,283157952,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-6,283162064,4096
+/tmp/NPB3.3-OMP/IS/is.c:494-7,283166176,4096
+#+end_example
+
+
+#+begin_src R :results output :session :exports both
+computeType <- function(df){
+  shared <-9
+  write <- 4
+  if(df[shared] >= 2){
+    mytype <- "Shared"
+  }else{
+    mytype <- "Private"
+  }
+  if(df[write] >= 1){
+     mytype <- paste(mytype,"Write" , sep="_")
+  }else{
+     mytype <- paste(mytype,"Read" , sep="_")
+  }
+  return(mytype)
+}
+
+k <- read.csv("Moca-is.B-orig-2016-03-01_14-03-40/Moca-framesoc.csv", header=T);
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+k$Value <- apply(k,1,computeType)
+k$Address <- sprintf("%f", as.numeric(paste("0x", k$Address, sep="")))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Tid <- NULL;
+#k$Reads <- NULL ;
+#k$Writes <- NULL ;
+k$Duration <- k$End - k$Start
+head(k);
+
+g <- k
+structs <- read.csv("Moca-is.B-orig-2016-03-01_14-03-40/is.B-orig.structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize");
+structs$AddressEnd = structs$AddressStart + structs$AddressSize;
+
+library(sqldf);
+m <- sqldf("SELECT g.Address, g.Start, g.End, g.Duration, g.Value, g.Reads, g.Writes, g.N, structs.Structure
+            FROM g
+            INNER JOIN structs
+            ON (g.Address >= structs.AddressStart) AND (g.Address <= structs.AddressEnd)");
+head(m);
+#+end_src
+
+#+RESULTS:
+#+begin_example
+            X.Virt            X.Phy Nreads Nwrites CPUMask  Start    End TaskId
+1 0000000000400040 000062000b1dfa80      1       0    1011      1    171      0
+2 00000000004002a8 000062000b1dfa80      1       0    1011  32663  34153      0
+3 0000000000400bd4 000062000b1dfa80      1       0    1011  55271  72678      0
+4 00000000004009a0 000062000b1dfa80      1       0      11  88569  88776      1
+5 00000000004009a0 000062000b1dfa80      1       0     111  92562 103554      7
+6 00000000004009a0 000062000b1dfa80      1       0   10011 238634 245102      2
+  Shared
+1      1
+2      1
+3      1
+4      1
+5      1
+6      1
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+         Address Reads Writes  Start    End N        Value Duration
+1 4194368.000000     1      0      1    171 1 Private_Read      170
+2 4194984.000000     1      0  32663  34153 1 Private_Read     1490
+3 4197332.000000     1      0  55271  72678 1 Private_Read    17407
+4 4196768.000000     1      0  88569  88776 1 Private_Read      207
+5 4196768.000000     1      0  92562 103554 1 Private_Read    10992
+6 4196768.000000     1      0 238634 245102 1 Private_Read     6468
+Loading required package: gsubfn
+Loading required package: proto
+Loading required package: RSQLite
+Loading required package: DBI
+ Loading required package: tcltk
+         Address  Start    End Duration         Value Reads Writes N Structure
+1 6307840.000000 279630 283344     3714 Private_Write     1      1 1 key_buff1
+2 6307840.000000 310398 410993   100595 Private_Write     1      1 1 key_buff1
+3 6307840.000000 452318 485570    33252 Private_Write     1      1 1 key_buff1
+4 6307840.000000 485572 511748    26176 Private_Write     1      1 1 key_buff1
+5 6307840.000000 511748 521080     9332  Shared_Write     1      1 2 key_buff1
+6 6307840.000000 511748 521080     9332  Shared_Write     1      1 2 key_buff1
+#+end_example
+
+
+#+begin_src R :results output graphics :file img/intensity_is_B_orig_threads.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(m) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(N))) +
+  facet_grid(Structure~Value, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_is_B_orig_threads.png]]
+
+
+
+#+begin_src R :results output :session :exports both
+library(plyr)
+n <- ddply(m,c("Structure"),summarize,Reads=sum(Reads), Writes=sum(Writes));
+o <- n
+o$Writes <- NULL
+o$Type <- rep("Read", nrow(o))
+names(o) <- c("Structure", "N", "Type")
+q <- n
+q$Reads <- NULL
+q$Type <- rep("Write", nrow(o))
+names(q) <- c("Structure", "N", "Type")
+q <- rbind(q,o)
+head(q)
+#+end_src
+
+#+RESULTS:
+:                       Structure      N  Type
+: 1                     key_array  76186 Write
+: 2                     key_buff1  59945 Write
+: 3                     key_buff2 406236 Write
+: 4   /tmp/NPB3.3-OMP/IS/is.c:494     37 Write
+: 5 /tmp/NPB3.3-OMP/IS/is.c:494-1     59 Write
+: 6 /tmp/NPB3.3-OMP/IS/is.c:494-2     65 Write
+
+#+begin_src R :results output graphics :file img/struct_importance_is_B_orig.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q,aes(x=Structure,y=N, fill=Type)) +
+  theme_bw() +
+  geom_bar(stat="identity")
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/struct_importance_is_B_orig.png]]
+
+
+So far no suprise, the B class looks like the A.
+
+#+begin_src R :results output graphics :file img/intensity_is_B_orig_threads_zoom.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+r <- m[grepl("key_", m$Structure),]
+p <- ggplot(r) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(N))) +
+  facet_grid(Structure~Value, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_is_B_orig_threads_zoom.png]]
+
+So we can compare this visualisation to the previous one:
+[[file:img/intensity_is_threads_zoom.png][file:~/Work/labbook-lucas/img/intensity_is_threads_zoom.png]]
+
+- It seems that there are some writes on keyarray at the end of the
+  execution.
+- It is still hard to see anything on keybuff1.
+- Although keybuff2 patterns differs than on the previous trace, we
+  have again the exact same patterns of shared read and writes.
+
+  
+#+begin_src R :results output graphics :file img/intensity_is_B_orig_threads_zoom_nacc.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(r) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(Reads+Writes))) +
+  facet_grid(Structure~Value, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_is_B_orig_threads_zoom_nacc.png]]
+
+Still hard to see but there is a little something in the middle of keybuff1
+Let's try to zoom as mush as possible:
+
+#+begin_src R :results output graphics :file img/intensity_is_threads_zoom_nacc2.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(subset(r, r$Structure=="key_buff1")) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(Reads+Writes))) +
+  facet_grid(Structure~., scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_is_threads_zoom_nacc2.png]]
+
+Still hard to see anything ...
+What happens if we do the same zoom on the thread based intensity ?
+
+#+begin_src R :results output graphics :file img/intensity_is_B_orig_threads_zoo2m.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(subset(r,r$Structure=="key_buff1")) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Address,yend=Address, color=as.factor(N))) +
+  facet_grid(Structure~., scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_is_B_orig_threads_zoo2m.png]]
+
+Still hard to see anything ...
+Maybe it is harder to see such behavior over the time ...
+So next step, compare these results to the modified version, maybe we
+will be able to see something.
+
 *** TODO Compare with modified trace
 - State "TODO"       from              [2016-03-01 Tue 11:26]
