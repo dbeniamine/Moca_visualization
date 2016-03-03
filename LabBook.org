@@ -3423,3 +3423,561 @@ p
 
 There are some negative pageIds I don't know why, but it is late and
 I'm exhausted, I'll fix that tomorrow.
+
+* DONE 2016-03-02 Continue on Tabarnac likes plot                     :David:
+- State "DONE"       from "TODO"       [2016-03-03 Thu 15:11]
+- State "TODO"       from              [2016-03-02 Wed 10:58]
+  
+We continue on the analysis from: [[*Tabarnac like plots wth Moca traces][yesterday]] trying to fix the
+"addresses as factor" issue, to do so, we parse the addresses as bigz
+as soon as possible:
+
+#+begin_src R :results output :session :exports both
+library(gmp)
+computeType <- function(df){
+  shared <-9
+  write <- 4
+  if(df[shared] >= 2){
+    mytype <- "Shared"
+  }else{
+    mytype <- "Private"
+  }
+  if(df[write] >= 1){
+     mytype <- paste(mytype,"Write" , sep="_")
+  }else{
+     mytype <- paste(mytype,"Read" , sep="_")
+  }
+  return(mytype)
+}
+
+k <- read.csv("Moca-is.B-orig-2016-03-01_14-03-40/Moca-framesoc.csv", header=T);
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+k$Value <- apply(k,1,computeType)
+# Use bigz to parse
+k$Address <- as.character(as.bigz(paste("0x", k$Address, sep="")))
+k$Phy <- NULL;
+k$CPU <- NULL;
+#k$Tid <- NULL;
+#k$Reads <- NULL ;
+#k$Writes <- NULL ;
+k$Duration <- k$End - k$Start
+head(k);
+str(k)
+
+# Add structure info
+g <- k
+structs <- read.csv("Moca-is.B-orig-2016-03-01_14-03-40/is.B-orig.structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize");
+# Use bigz to compute End, then go back tochar at sqldf does not handle bigz
+structs$AddressStart <- as.bigz(structs$AddressStart)
+structs$AddressSize <- as.bigz(structs$AddressSize)
+structs$AddressEnd = as.character(structs$AddressStart + structs$AddressSize);
+structs$AddressStart <- as.character(structs$AddressStart)
+structs$AddressSize <-  as.character(structs$AddressSize)
+
+str(structs)
+show(structs)
+
+library(sqldf);
+m <- sqldf("SELECT g.Address, g.Start, g.End, g.Duration, g.Value, g.Reads, g.Writes, g.Tid, g.N, structs.Structure
+            FROM g
+            INNER JOIN structs
+            ON (g.Address >= structs.AddressStart) AND (g.Address <= structs.AddressEnd)");
+head(m);
+#+end_src
+
+#+RESULTS:
+#+begin_example
+            X.Virt            X.Phy Nreads Nwrites CPUMask  Start    End TaskId
+1 0000000000400040 000062000b1dfa80      1       0    1011      1    171      0
+2 00000000004002a8 000062000b1dfa80      1       0    1011  32663  34153      0
+3 0000000000400bd4 000062000b1dfa80      1       0    1011  55271  72678      0
+4 00000000004009a0 000062000b1dfa80      1       0      11  88569  88776      1
+5 00000000004009a0 000062000b1dfa80      1       0     111  92562 103554      7
+6 00000000004009a0 000062000b1dfa80      1       0   10011 238634 245102      2
+  Shared
+1      1
+2      1
+3      1
+4      1
+5      1
+6      1
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+  Address Reads Writes  Start    End Tid N        Value Duration
+1 4194368     1      0      1    171   0 1 Private_Read      170
+2 4194984     1      0  32663  34153   0 1 Private_Read     1490
+3 4197332     1      0  55271  72678   0 1 Private_Read    17407
+4 4196768     1      0  88569  88776   1 1 Private_Read      207
+5 4196768     1      0  92562 103554   7 1 Private_Read    10992
+6 4196768     1      0 238634 245102   2 1 Private_Read     6468
+'data.frame':	1157330 obs. of  9 variables:
+ $ Address : chr  "4194368" "4194984" "4197332" "4196768" ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 32663 55271 88569 92562 238634 254421 258859 258859 286485 ...
+ $ End     : int  171 34153 72678 88776 103554 245102 258859 286485 286485 310331 ...
+ $ Tid     : int  0 0 0 1 7 2 4 4 6 6 ...
+ $ N       : int  1 1 1 1 1 1 1 2 2 1 ...
+ $ Value   : chr  "Private_Read" "Private_Read" "Private_Read" "Private_Read" ...
+ $ Duration: int  170 1490 17407 207 10992 6468 4438 27626 27626 23846 ...
+'data.frame':	14 obs. of  4 variables:
+ $ Structure   : Factor w/ 14 levels "__GI___pthread_keys",..: 1 5 3 2 4 14 6 7 8 9 ...
+ $ AddressStart: chr  "2196192" "2196192" "6305024" "14693632" ...
+ $ AddressSize : chr  "16384" "16384" "8388608" "134217728" ...
+ $ AddressEnd  : chr  "2212576" "2212576" "14693632" "148911360" ...
+                       Structure AddressStart AddressSize AddressEnd
+1            __GI___pthread_keys      2196192       16384    2212576
+2                 __pthread_keys      2196192       16384    2212576
+3                      key_buff1      6305024     8388608   14693632
+4                      key_array     14693632   134217728  148911360
+5                      key_buff2    148911360   134217728  283129088
+6                UnnamedStruct#2    283131920       32816  283164736
+7    /tmp/NPB3.3-OMP/IS/is.c:494    283137392        4096  283141488
+8  /tmp/NPB3.3-OMP/IS/is.c:494-1    283141504        4096  283145600
+9  /tmp/NPB3.3-OMP/IS/is.c:494-2    283145616        4096  283149712
+10 /tmp/NPB3.3-OMP/IS/is.c:494-3    283149728        4096  283153824
+11 /tmp/NPB3.3-OMP/IS/is.c:494-4    283153840        4096  283157936
+12 /tmp/NPB3.3-OMP/IS/is.c:494-5    283157952        4096  283162048
+13 /tmp/NPB3.3-OMP/IS/is.c:494-6    283162064        4096  283166160
+14 /tmp/NPB3.3-OMP/IS/is.c:494-7    283166176        4096  283170272
+   Address  Start    End Duration         Value Reads Writes Tid N Structure
+1 14693632      1    171      170 Private_Write     1      1   0 1 key_array
+2 14693636  55271  72678    17407 Private_Write     1      1   0 1 key_array
+3 14693632  88513 100648    12135  Private_Read     1      0   0 1 key_array
+4 14695032 100662 103515     2853  Private_Read     1      0   0 1 key_array
+5 14693632 341425 377139    35714  Private_Read     1      0   0 1 key_array
+6 14693632 377139 384252     7113   Shared_Read     1      0   0 2 key_array
+#+end_example
+
+From now on we should be able to use bigz only, so let's compute the
+Page and Offset of each accesses
+
+#+begin_src R :results output :session :exports both
+n <- m[grepl("key_",m$Structure),]
+# Compute the first page of each structure
+pageAddr <- function(df,addrcol=1){
+    addrCol <- 1
+    a <- as.bigz(df[addrCol])
+    return (as.character(a - mod.bigz(a,4096)));
+}
+#structs$Page <- apply(structs[c("AddressStart","Structure")],1,pageAddr);
+show(structs)
+offset <- function(df){
+    AddrCol <- 1
+    #PageCol <- 11
+    structCol <- 10
+    base <- as.bigz(structs[grepl(df[structCol],structs$Structure),]$AddressStart)
+    return(as.integer(as.character((as.bigz(df[AddrCol]) - base))));
+}
+#n$Page <- apply(n,1,pageAddr)
+n$Offset <- apply(n,1,offset)
+str(n)
+head(n)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+                       Structure AddressStart AddressSize AddressEnd
+1            __GI___pthread_keys      2196192       16384    2212576
+2                 __pthread_keys      2196192       16384    2212576
+3                      key_buff1      6305024     8388608   14693632
+4                      key_array     14693632   134217728  148911360
+5                      key_buff2    148911360   134217728  283129088
+6                UnnamedStruct#2    283131920       32816  283164736
+7    /tmp/NPB3.3-OMP/IS/is.c:494    283137392        4096  283141488
+8  /tmp/NPB3.3-OMP/IS/is.c:494-1    283141504        4096  283145600
+9  /tmp/NPB3.3-OMP/IS/is.c:494-2    283145616        4096  283149712
+10 /tmp/NPB3.3-OMP/IS/is.c:494-3    283149728        4096  283153824
+11 /tmp/NPB3.3-OMP/IS/is.c:494-4    283153840        4096  283157936
+12 /tmp/NPB3.3-OMP/IS/is.c:494-5    283157952        4096  283162048
+13 /tmp/NPB3.3-OMP/IS/is.c:494-6    283162064        4096  283166160
+14 /tmp/NPB3.3-OMP/IS/is.c:494-7    283166176        4096  283170272
+'data.frame':	792868 obs. of  11 variables:
+ $ Address  : chr  "14693632" "14693636" "14693632" "14695032" ...
+ $ Start    : int  1 55271 88513 100662 341425 377139 546598 618709 659766 1 ...
+ $ End      : int  171 72678 100648 103515 377139 384252 618709 659753 689920 171 ...
+ $ Duration : int  170 17407 12135 2853 35714 7113 72111 41044 30154 170 ...
+ $ Value    : chr  "Private_Write" "Private_Write" "Private_Read" "Private_Read" ...
+ $ Reads    : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes   : int  1 1 0 0 0 0 0 0 0 1 ...
+ $ Tid      : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ N        : int  1 1 1 1 1 2 2 1 1 1 ...
+ $ Structure: Factor w/ 14 levels "__GI___pthread_keys",..: 2 2 2 2 2 2 2 2 2 2 ...
+ $ Offset   : int  0 4 0 1400 0 0 0 0 0 2816 ...
+   Address  Start    End Duration         Value Reads Writes Tid N Structure
+1 14693632      1    171      170 Private_Write     1      1   0 1 key_array
+2 14693636  55271  72678    17407 Private_Write     1      1   0 1 key_array
+3 14693632  88513 100648    12135  Private_Read     1      0   0 1 key_array
+4 14695032 100662 103515     2853  Private_Read     1      0   0 1 key_array
+5 14693632 341425 377139    35714  Private_Read     1      0   0 1 key_array
+6 14693632 377139 384252     7113   Shared_Read     1      0   0 2 key_array
+  Offset
+1      0
+2      4
+3      0
+4   1400
+5      0
+6      0
+#+end_example
+
+Let's check if it's ok:
+#+begin_src R :results output :session :exports both
+head(subset(n,n$Offset < 0)) 
+#+end_src
+
+#+RESULTS:
+#+begin_example
+     Address  Start    End Duration         Value Reads Writes Tid N Structure
+944 14893056    178   2972     2794 Private_Write     1      1   0 1 key_buff2
+945 14893056  55271  72678    17407  Private_Read     1      0   0 1 key_buff2
+946 14893056 106948 117919    10971  Private_Read     1      0   0 1 key_buff2
+947 14893056 313094 341415    28321  Private_Read     1      0   0 1 key_buff2
+948 14893056 341425 384252    42827  Private_Read     1      0   0 1 key_buff2
+949 14893056 384254 444926    60672  Private_Read     1      0   0 1 key_buff2
+        Offset
+944 -134018304
+945 -134018304
+946 -134018304
+947 -134018304
+948 -134018304
+949 -134018304
+#+end_example
+
+We have some negative offset again, I guess that the sqldf is not
+working as it is doing comparison on factors, let see if we can do
+this comparing big integers:
+
+#+begin_src R :results output :session :exports both
+library(gmp)
+
+
+k <- read.csv("Moca-is.B-orig-2016-03-01_14-03-40/Moca-framesoc.csv", header=T);
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+# Use bigz to parse
+k$Address <- as.bigz(paste("0x", k$Address, sep=""))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Duration <- k$End - k$Start
+head(k);
+str(k)
+
+# Add structure info
+structs <- read.csv("Moca-is.B-orig-2016-03-01_14-03-40/is.B-orig.structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize");
+structs$AddressStart <- as.bigz(structs$AddressStart)
+structs$AddressSize <- as.bigz(structs$AddressSize)
+structs$AddressEnd <- structs$AddressStart + structs$AddressSize
+
+
+# Filter interesting data structure as soon as possible
+structs <- structs[grepl("key_",structs$Structure),]
+str(structs)
+show(structs)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+
+Attaching package: ‘gmp’
+
+The following objects are masked from ‘package:base’:
+
+    %*%, apply, crossprod, matrix, tcrossprod
+            X.Virt            X.Phy Nreads Nwrites CPUMask  Start    End TaskId
+1 0000000000400040 000062000b1dfa80      1       0    1011      1    171      0
+2 00000000004002a8 000062000b1dfa80      1       0    1011  32663  34153      0
+3 0000000000400bd4 000062000b1dfa80      1       0    1011  55271  72678      0
+4 00000000004009a0 000062000b1dfa80      1       0      11  88569  88776      1
+5 00000000004009a0 000062000b1dfa80      1       0     111  92562 103554      7
+6 00000000004009a0 000062000b1dfa80      1       0   10011 238634 245102      2
+  Shared
+1      1
+2      1
+3      1
+4      1
+5      1
+6      1
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+  Address Reads Writes  Start    End Tid N Duration
+1 4194368     1      0      1    171   0 1      170
+2 4194984     1      0  32663  34153   0 1     1490
+3 4197332     1      0  55271  72678   0 1    17407
+4 4196768     1      0  88569  88776   1 1      207
+5 4196768     1      0  92562 103554   7 1    10992
+6 4196768     1      0 238634 245102   2 1     6468
+'data.frame':	1157330 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:13892924] d2 a8 11 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 32663 55271 88569 92562 238634 254421 258859 258859 286485 ...
+ $ End     : int  171 34153 72678 88776 103554 245102 258859 286485 286485 310331 ...
+ $ Tid     : int  0 0 0 1 7 2 4 4 6 6 ...
+ $ N       : int  1 1 1 1 1 1 1 2 2 1 ...
+ $ Duration: int  170 1490 17407 207 10992 6468 4438 27626 27626 23846 ...
+'data.frame':	3 obs. of  4 variables:
+ $ Structure   : Factor w/ 14 levels "__GI___pthread_keys",..: 3 2 4
+ $ AddressStart:Class 'bigz'  raw [1:40] 03 00 00 00 ...
+ $ AddressSize :Class 'bigz'  raw [1:40] 03 00 00 00 ...
+ $ AddressEnd  :Class 'bigz'  raw [1:40] 03 00 00 00 ...
+  Structure AddressStart AddressSize AddressEnd
+3 key_buff1      6305024     8388608   14693632
+4 key_array     14693632   134217728  148911360
+5 key_buff2    148911360   134217728  283129088
+#+end_example
+
+We now that because of the preprocessing both k and structs are sorted
+increasingly, we can use this to compute quickly data structure
+without using sqldf (which does not handle big integers).
+First let filter out everything that is not in a data structure:
+
+#+begin_src R :results output :session :exports both
+nrow(k)
+minA <- structs[1,2]
+maxA <- structs[3,4]
+l <- subset(k, k$Address >= minA & k$Address <= maxA)
+computeType <- function(df){
+  shared <- 7
+  write  <- 3
+  if(df[shared] >= 2){
+    mytype <- "Shared"
+  }else{
+    mytype <- "Private"
+  }
+  if(df[write] >= 1){
+     mytype <- paste(mytype,"Write" , sep="_")
+  }else{
+     mytype <- paste(mytype,"Read" , sep="_")
+  }
+  return(mytype)
+}
+l$Value <- apply(l,1,computeType)
+nrow(l)
+head(l)
+getStruct <- function(vect){
+    aCol <- 1
+    while(vect[1] > structs[curStruct,4]){
+      curStruct <- curStruct +1;
+    }
+    return(structs[curStruct,1]);
+}
+curStruct <- 1
+l$Structure <- apply(l,1,getStruct)
+head(l)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+[1] 1157330
+[1] 1150520
+   Address Reads Writes  Start    End Tid N Duration         Value
+80 6307840     1      1 279630 283344   7 1     3714 Private_Write
+81 6307840     1      1 310398 410993   6 1   100595 Private_Write
+82 6307840     1      1 452318 485570   6 1    33252 Private_Write
+83 6307840     1      1 485572 511748   6 1    26176 Private_Write
+84 6307840     1      1 511748 521080   6 2     9332  Shared_Write
+85 6307840     1      1 511748 521080   0 2     9332  Shared_Write
+   Address Reads Writes  Start    End Tid N Duration         Value Structure
+80 6307840     1      1 279630 283344   7 1     3714 Private_Write key_buff1
+81 6307840     1      1 310398 410993   6 1   100595 Private_Write key_buff1
+82 6307840     1      1 452318 485570   6 1    33252 Private_Write key_buff1
+83 6307840     1      1 485572 511748   6 1    26176 Private_Write key_buff1
+84 6307840     1      1 511748 521080   6 2     9332  Shared_Write key_buff1
+85 6307840     1      1 511748 521080   0 2     9332  Shared_Write key_buff1
+#+end_example
+
+This is clearly not the R way to do this and it is not very efficient
+(about 5'), but it works.
+We can now compute offset and it shouldn't be negative:
+
+#+begin_src R :results output :session :exports both
+pageAddr <- function(df,addrcol=1){
+    addrCol <- 1
+    a <- as.bigz(df[addrCol])
+    return (as.character(a - mod.bigz(a,4096)));
+}
+structs$Page <- apply(structs[c("AddressStart","Structure")],1,pageAddr);
+show(structs)
+offset <- function(df){
+    PageCol <- 11
+    structCol <- 10
+    base <- as.bigz(structs[grepl(df[structCol],structs$Structure),]$Page)
+    return(as.integer(as.character((as.bigz(df[PageCol]) - base)))/4096);
+}
+l$Page <- apply(l,1,pageAddr)
+l$Offset <- apply(l,1,offset)
+str(l)
+head(l)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+  Structure AddressStart AddressSize AddressEnd      Page
+3 key_buff1      6305024     8388608   14693632   6303744
+4 key_array     14693632   134217728  148911360  14692352
+5 key_buff2    148911360   134217728  283129088 148910080
+'data.frame':	1150520 obs. of  12 variables:
+ $ Address  :Class 'bigz'  raw [1:13806244] 38 8e 11 00 ...
+ $ Reads    : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Start    : int  279630 310398 452318 485572 511748 511748 521080 522640 522640 538401 ...
+ $ End      : int  283344 410993 485570 511748 521080 521080 522640 538401 538401 578774 ...
+ $ Tid      : int  7 6 6 6 6 0 0 0 6 6 ...
+ $ N        : int  1 1 1 1 2 2 1 2 2 1 ...
+ $ Duration : int  3714 100595 33252 26176 9332 9332 1560 15761 15761 40373 ...
+ $ Value    : chr  "Private_Write" "Private_Write" "Private_Write" "Private_Write" ...
+ $ Structure: Factor w/ 14 levels "__GI___pthread_keys",..: 3 3 3 3 3 3 3 3 3 3 ...
+ $ Page     : chr  "6307840" "6307840" "6307840" "6307840" ...
+ $ Offset   : num  1 1 1 1 1 1 1 1 1 1 ...
+   Address Reads Writes  Start    End Tid N Duration         Value Structure
+80 6307840     1      1 279630 283344   7 1     3714 Private_Write key_buff1
+81 6307840     1      1 310398 410993   6 1   100595 Private_Write key_buff1
+82 6307840     1      1 452318 485570   6 1    33252 Private_Write key_buff1
+83 6307840     1      1 485572 511748   6 1    26176 Private_Write key_buff1
+84 6307840     1      1 511748 521080   6 2     9332  Shared_Write key_buff1
+85 6307840     1      1 511748 521080   0 2     9332  Shared_Write key_buff1
+      Page Offset
+80 6307840      1
+81 6307840      1
+82 6307840      1
+83 6307840      1
+84 6307840      1
+85 6307840      1
+#+end_example
+
+Once again around 5 minutes, I guess we can improve this, but for now
+let's continue
+
+#+begin_src R :results output :session :exports both
+library(plyr)
+m <- ddply(l,.(Offset, Tid, Structure), summarize, N=sum(Reads)+sum(Writes));
+str(m)
+head(m)
+#+end_src
+
+This was creazily slow, from what I read, I guess that aggregate
+should be faster, let's give it a try:
+
+#+begin_src R :results output :session :exports both
+m <- aggregate(l[,c('Reads','Writes', 'N')],l[,c('Tid','Structure','Offset')], function(d) sum(d));
+str(m)
+head(m)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+'data.frame':	201665 obs. of  6 variables:
+ $ Tid      : int  0 0 1 2 3 4 5 6 7 0 ...
+ $ Structure: Factor w/ 14 levels "__GI___pthread_keys",..: 2 4 4 4 4 4 4 4 4 2 ...
+ $ Offset   : num  0 0 0 0 0 0 0 0 0 1 ...
+ $ Reads    : int  2 13 5 20 15 11 18 23 25 14 ...
+ $ Writes   : int  1 6 5 20 15 10 10 12 14 2 ...
+ $ N        : int  2 39 15 42 34 31 58 75 80 14 ...
+  Tid Structure Offset Reads Writes  N
+1   0 key_array      0     2      1  2
+2   0 key_buff2      0    13      6 39
+3   1 key_buff2      0     5      5 15
+4   2 key_buff2      0    20     20 42
+5   3 key_buff2      0    15     15 34
+6   4 key_buff2      0    11     10 31
+#+end_example
+
+It tooks only a few seconds, this is impressive !
+
+#+begin_src R :results output graphics :file img/tabarnac_page_is_b_offsetfix.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(m,aes(x=Offset,y=Tid,color=Reads+Writes)) +
+  theme_bw() +
+  geom_point() +
+  facet_wrap(~Structure) +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/tabarnac_page_is_b_offsetfix.png]]
+
+
+No more negative offset, this looks great, let's focus on keybuff1
+
+#+begin_src R :results output graphics :file img/tabarnac_page_is_b_offsetfix_kb1.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+n <- m[grepl("key_buff1", m$Structure),];
+p <- ggplot(n,aes(x=Offset,y=Tid,color=Reads+Writes)) +
+  theme_bw() +
+  geom_point() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/tabarnac_page_is_b_offsetfix_kb1.png]]
+
+And here comes the bad news: Moca traces are not precise enough to see
+the fact that the middle addresses of keybuff1 are accessed more often
+than the others...
+
+
+What happens if we plot the number of threads using the page at the
+same time:
+
+#+begin_src R :results output graphics :file img/is_b_intensity_offset.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(m,aes(x=Offset,y=Tid,color=N)) +
+  theme_bw() +
+  geom_point() +
+  theme(legend.title=element_blank()) +
+  facet_wrap(~Structure) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/is_b_intensity_offset.png]]
+
+Once again we need to zoom
+
+#+begin_src R :results output graphics :file img/is_b_intensity_offset_kb1.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(n,aes(x=Offset,y=Tid,color=N)) +
+  theme_bw() +
+  geom_point() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/is_b_intensity_offset_kb1.png]]
+
+
+And once again we can't see anything.
+
+So it appears that with Moca if we gain the temporal information, our
+traces are not precise enough to see the same things as Tabarnac.
+
+While I was writing the code to do these plots, I fixed the ugly
+addresses issue, I think I should redo the plot from [[*IShttp:][IS]] but with the
+addresses fixed, maybe a pattern can appear.
+
+My R code I very ugly and not really R-ish, @Lucas if you have some
+time maybe you can speed up (the call to apply are very slow).
