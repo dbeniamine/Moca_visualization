@@ -6855,5 +6855,1442 @@ malloc#30, If we were actually trying to do some improvements on Sofa
 we should focus on it.
 
 I will stop here for Sofa and work on some other benchmarks, once I
-manage to do some performance improments on a small kernel or two I
+manage to do some performance improvements on a small kernel or two I
 will go back to Sofa.
+
+* 2016-05 Buggy Moca traces                                           :David:
+** 2016-05-02 Ziad's benchmarks                                      :David:
+*** First try 
+
+Ziad is working on linear algebra kernels, he told me that his
+benchmarks can interest me.
+
+So the benchmarks are available at github:
+https://github.com/linbox-team/fflas-ffpack
+
+And I will with the dgemm benchmark:
+
+TODO: Add archive link and md5sum
+
+#+begin_src sh :results output :exports both :session
+cd Moca-benchmark-fgemm-2016-04-19_15-56-38
+# Already done on grid5000 (requires a huge amount of memory)
+#~/Work/Moca/src/utils/create_event_producer.sh 4096 Moca-full-trace.csv
+head Moca-framesoc.csv
+sort -n -t',' -k2 structs.csv | \
+awk -F , 'BEGIN{p="";cpt=1} {if(p==$1){n=$1"-"cpt;cpt++}\
+else{cpt=1;n=$1};p=$1;print n","$2","$3","$4}'  > structs-uniq.csv
+head  structs-uniq.csv
+#+end_src
+
+#+RESULTS:
+#+begin_example
+@Virt,@Phy,Nreads,Nwrites,CPUMask,Start,End,TaskId,Shared
+0000000000400040,000062000b3531f0,1,0,000010110,1,232,0,1
+0000000000400270,000062000b3531f0,1,0,010000110,234,236,2,1
+0000000000400270,000062000b3531f0,1,0,010000110,236,8408,2,2
+0000000000400270,000062000b3531f0,1,0,000000111,236,8408,4,2
+0000000000400270,000062000b3531f0,1,0,000000111,8408,14840,4,1
+000000000040049d,000062000b3531f0,1,0,001000110,29490,29506,0,1
+0000000000405435,000062000b23f2b0,1,0,010000110,1,232,0,1
+0000000000411960,000062000b23bb20,1,0,000010110,1,232,0,1
+0000000000411665,000062000b23bb20,1,0,000001110,233,18208,1,1
+name,addr,size,backtrace
+_ZN6Givaro12BlocFreeList7TabSizeE,132288,4096,NA
+_ZN6Givaro8Primes167_primesE,137536,52336,NA
+_ZN6Givaro8AdicSize8qadic_64E,189888,31752,NA
+_ZN6Givaro8AdicSize8n_max_64E,221696,31752,NA
+_ZN6Givaro12BlocFreeList7TabFreeE,2439552,4096,NA
+_ZN6GivaroL9SortedAllE,2443904,4096,NA
+_ZN6GivaroL3AllE,2448000,8192,NA
+_ZN6Givaro8AdicSize8qadic_53E,253504,11088,NA
+_ZN6Givaro8AdicSize8n_max_53E,264640,11088,NA
+#+end_example
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+library(gmp)
+
+
+system.time(k <- read.csv("Moca-benchmark-fgemm-2016-04-19_15-56-38/Moca-framesoc.csv", header=T));
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+# Use bigz to parse
+k$Address <- as.bigz(paste("0x", k$Address, sep=""))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Duration <- k$End - k$Start
+head(k);
+str(k)
+
+# Add structure info
+structs <- read.csv("Moca-benchmark-fgemm-2016-04-19_15-56-38/structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize", "BackTrace");
+structs$AddressStart <- as.bigz(structs$AddressStart)
+structs$AddressSize <- as.bigz(structs$AddressSize)
+structs$AddressEnd <- structs$AddressStart + structs$AddressSize
+head(structs)
+# Filter interesting data structure as soon as possible
+# The following line is specific to matrix, adapt it for other analysis
+# structs <- structs[!grepl("thread",structs$Structure),]
+str(structs)
+show(structs)
+
+# Retrieve struct infos
+nrow(k)
+# These lines are specific to matrix, adapt it for other analysis
+minA <- structs[1,2]
+maxA <- structs[nrow(structs),5]
+proc.time() - ptm
+show(minA)
+show(maxA)
+nrow(k)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+  0.520   0.004   0.524
+            X.Virt            X.Phy Nreads Nwrites  CPUMask Start   End TaskId
+1 0000000000400040 000062000b3531f0      1       0    10110     1   232      0
+2 0000000000400270 000062000b3531f0      1       0 10000110   234   236      2
+3 0000000000400270 000062000b3531f0      1       0 10000110   236  8408      2
+4 0000000000400270 000062000b3531f0      1       0      111   236  8408      4
+5 0000000000400270 000062000b3531f0      1       0      111  8408 14840      4
+6 000000000040049d 000062000b3531f0      1       0  1000110 29490 29506      0
+  Shared
+1      1
+2      1
+3      2
+4      2
+5      1
+6      1
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+  Address Reads Writes Start   End Tid N Duration
+1 4194368     1      0     1   232   0 1      231
+2 4194928     1      0   234   236   2 1        2
+3 4194928     1      0   236  8408   2 2     8172
+4 4194928     1      0   236  8408   4 2     8172
+5 4194928     1      0  8408 14840   4 1     6432
+6 4195485     1      0 29490 29506   0 1       16
+'data.frame':	60213 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:962836] 35 eb 00 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 234 236 236 8408 29490 1 1 233 23419 ...
+ $ End     : int  232 236 8408 8408 14840 29506 232 232 18208 29548 ...
+ $ Tid     : int  0 2 2 4 4 0 0 0 1 4 ...
+ $ N       : int  1 1 2 2 1 1 1 1 1 1 ...
+ $ Duration: int  231 2 8172 8172 6432 16 231 231 17975 6129 ...
+                          Structure AddressStart AddressSize BackTrace
+1 _ZN6Givaro12BlocFreeList7TabSizeE       132288        4096      <NA>
+2      _ZN6Givaro8Primes167_primesE       137536       52336      <NA>
+3     _ZN6Givaro8AdicSize8qadic_64E       189888       31752      <NA>
+4     _ZN6Givaro8AdicSize8n_max_64E       221696       31752      <NA>
+5 _ZN6Givaro12BlocFreeList7TabFreeE      2439552        4096      <NA>
+6            _ZN6GivaroL9SortedAllE      2443904        4096      <NA>
+  AddressEnd
+1     136384
+2     189872
+3     221640
+4     253448
+5    2443648
+6    2448000
+'data.frame':	18 obs. of  5 variables:
+ $ Structure   : Factor w/ 18 levels "calloc#0","__GI___pthread_keys",..: 11 16 15 13 10 18 17 14 12 2 ...
+ $ AddressStart:Class 'bigz'  raw [1:220] 12 00 00 00 ...
+ $ AddressSize :Class 'bigz'  raw [1:220] 12 00 00 00 ...
+ $ BackTrace   : Factor w/ 5 levels "moca.so:0x7f97cd6f6ce2:0x7f97cd6f697d/libc.so.6:0x7f97cbe48601:0x7f97cbe79bf6:0x7f97cbe4e830/libgomp.so.1:0x7f97cc5807b0:0x7f97"| __truncated__,..: NA NA NA NA NA NA NA NA NA NA ...
+ $ AddressEnd  :Class 'bigz'  raw [1:220] 12 00 00 00 ...
+                           Structure AddressStart AddressSize
+1  _ZN6Givaro12BlocFreeList7TabSizeE       132288        4096
+2       _ZN6Givaro8Primes167_primesE       137536       52336
+3      _ZN6Givaro8AdicSize8qadic_64E       189888       31752
+4      _ZN6Givaro8AdicSize8n_max_64E       221696       31752
+5  _ZN6Givaro12BlocFreeList7TabFreeE      2439552        4096
+6             _ZN6GivaroL9SortedAllE      2443904        4096
+7                   _ZN6GivaroL3AllE      2448000        8192
+8      _ZN6Givaro8AdicSize8qadic_53E       253504       11088
+9      _ZN6Givaro8AdicSize8n_max_53E       264640       11088
+10               __GI___pthread_keys      2196192       16384
+11                    __pthread_keys      2196192       16384
+12       _ZN6Givaro11IntPrimeDom2IPE      2412992       14068
+13      _ZN6Givaro11IntPrimeDom3IP2E      2427072       12144
+14                          calloc#0     37826560        4096
+15                          malloc#2     37872848        4096
+16                          malloc#3     37879216        4096
+17                          malloc#4     37885584        4096
+18                          malloc#1     37836368       32816
+                                                                                                                                                                                                   BackTrace
+1                                                                                                                                                                                                       <NA>
+2                                                                                                                                                                                                       <NA>
+3                                                                                                                                                                                                       <NA>
+4                                                                                                                                                                                                       <NA>
+5                                                                                                                                                                                                       <NA>
+6                                                                                                                                                                                                       <NA>
+7                                                                                                                                                                                                       <NA>
+8                                                                                                                                                                                                       <NA>
+9                                                                                                                                                                                                       <NA>
+10                                                                                                                                                                                                      <NA>
+11                                                                                                                                                                                                      <NA>
+12                                                                                                                                                                                                      <NA>
+13                                                                                                                                                                                                      <NA>
+14                                          moca.so:0x7f97cd6f6ce2:0x7f97cd6f6a6c/libc.so.6:0x7f97cbde340c/libquadmath.so.0:0x7f97cb421432/ld-linux-x86-64.so.2:0x7f97cdd069fa:0x7f97cdd06ae3:0x7f97cdcf91ca
+15         moca.so:0x7f97cd6f6ce2:0x7f97cd6f697d/libstdc++.so.6:0x7f97ccae72e8:0x7f97ccae7399/libgivaro.so.8:0x7f97cd2378ae:0x7f97cd22dc06/ld-linux-x86-64.so.2:0x7f97cdd069fa:0x7f97cdd06ae3:0x7f97cdcf91ca
+16         moca.so:0x7f97cd6f6ce2:0x7f97cd6f697d/libstdc++.so.6:0x7f97ccae72e8:0x7f97ccae7399/libgivaro.so.8:0x7f97cd2378bc:0x7f97cd22dc06/ld-linux-x86-64.so.2:0x7f97cdd069fa:0x7f97cdd06ae3:0x7f97cdcf91ca
+17         moca.so:0x7f97cd6f6ce2:0x7f97cd6f697d/libstdc++.so.6:0x7f97ccae72e8:0x7f97ccae7399/libgivaro.so.8:0x7f97cd2378ca:0x7f97cd22dc06/ld-linux-x86-64.so.2:0x7f97cdd069fa:0x7f97cdd06ae3:0x7f97cdcf91ca
+18 moca.so:0x7f97cd6f6ce2:0x7f97cd6f697d/libc.so.6:0x7f97cbe48601:0x7f97cbe79bf6:0x7f97cbe4e830/libgomp.so.1:0x7f97cc5807b0:0x7f97cc575d2d/ld-linux-x86-64.so.2:0x7f97cdd069fa:0x7f97cdd06ae3:0x7f97cdcf91ca
+   AddressEnd
+1      136384
+2      189872
+3      221640
+4      253448
+5     2443648
+6     2448000
+7     2456192
+8      264592
+9      275728
+10    2212576
+11    2212576
+12    2427060
+13    2439216
+14   37830656
+15   37876944
+16   37883312
+17   37889680
+18   37869184
+[1] 60213
+   user  system elapsed 
+  0.820   0.004   1.684
+Big Integer ('bigz') :
+[1] 132288
+Big Integer ('bigz') :
+[1] 37869184
+[1] 60213
+#+end_example
+
+#+begin_src R :results output :session :exports both
+#system.time(l <- subset(k, k$Address >= minA & k$Address <= maxA));
+system.time(l <- k[which(k$Address >= minA & k$Address <= maxA),]);
+head(l)
+str(l)
+nrow(l)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+  0.080   0.000   0.079
+  Address Reads Writes Start   End Tid N Duration
+1 4194368     1      0     1   232   0 1      231
+2 4194928     1      0   234   236   2 1        2
+3 4194928     1      0   236  8408   2 2     8172
+4 4194928     1      0   236  8408   4 2     8172
+5 4194928     1      0  8408 14840   4 1     6432
+6 4195485     1      0 29490 29506   0 1       16
+'data.frame':	63 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:760] 3f 00 00 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 234 236 236 8408 29490 1 1 233 23419 ...
+ $ End     : int  232 236 8408 8408 14840 29506 232 232 18208 29548 ...
+ $ Tid     : int  0 2 2 4 4 0 0 0 1 4 ...
+ $ N       : int  1 1 2 2 1 1 1 1 1 1 ...
+ $ Duration: int  231 2 8172 8172 6432 16 231 231 17975 6129 ...
+[1] 63
+#+end_example
+
+
+This is weird: only 63 accesses detected on the data structures over
+60213 accesses, I guess we need to do more precise traces, I will try
+to play on Moca settings to generate a more precise trace.
+
+Note: For bt we had 2215107 accesses.
+
+*** Second try 
+
+Here is another fgemm trace (different parameters)
+
+TODO: Add archive link and md5sum
+
+#+begin_src sh :results output :exports both :session
+cd Moca-benchmark-fgemm-2016-04-19_15-58-16
+# Already done on grid5000 (requires a huge amount of memory)
+#~/Work/Moca/src/utils/create_event_producer.sh 4096 Moca-full-trace.csv
+head Moca-framesoc.csv
+sort -n -t',' -k2 structs.csv | \
+awk -F , 'BEGIN{p="";cpt=1} {if(p==$1){n=$1"-"cpt;cpt++}\
+else{cpt=1;n=$1};p=$1;print n","$2","$3","$4}'  > structs-uniq.csv
+head  structs-uniq.csv
+#+end_src
+
+#+RESULTS:
+#+begin_example
+@Virt,@Phy,Nreads,Nwrites,CPUMask,Start,End,TaskId,Shared
+0000000000400040,000062000b3531f0,1,0,000001011,1,234,0,1
+0000000000400270,000062000b3531f0,1,0,000010011,243,6709,4,1
+0000000000400270,000062000b3531f0,1,0,000010011,6709,8784,4,2
+0000000000400270,000062000b3531f0,1,0,000100011,6709,8784,1,2
+0000000000400270,000062000b3531f0,1,0,000010011,8784,35287,4,1
+000000000040055d,000062000b3531f0,1,0,000000011,3826621,3828417,0,1
+00000000004006f5,000062000b3531f0,1,0,000010011,3836236,3837432,0,1
+0000000000405435,000062000b23f2b0,1,0,000000111,1,234,0,1
+0000000000411960,000062000b23bb20,1,0,000001011,1,234,0,1
+name,addr,size,backtrace
+_ZN6Givaro12BlocFreeList7TabSizeE,132288,4096,NA
+_ZN6Givaro8Primes167_primesE,137536,52336,NA
+_ZN6Givaro8AdicSize8qadic_64E,189888,31752,NA
+_ZN6Givaro8AdicSize8n_max_64E,221696,31752,NA
+_ZN6Givaro12BlocFreeList7TabFreeE,2439552,4096,NA
+_ZN6GivaroL9SortedAllE,2443904,4096,NA
+_ZN6GivaroL3AllE,2448000,8192,NA
+_ZN6Givaro8AdicSize8qadic_53E,253504,11088,NA
+_ZN6Givaro8AdicSize8n_max_53E,264640,11088,NA
+#+end_example
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+library(gmp)
+
+
+system.time(k <- read.csv("Moca-benchmark-fgemm-2016-04-19_15-58-16/Moca-framesoc.csv", header=T));
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+# Use bigz to parse
+k$Address <- as.bigz(paste("0x", k$Address, sep=""))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Duration <- k$End - k$Start
+head(k);
+str(k)
+
+# Add structure info
+structs <- read.csv("Moca-benchmark-fgemm-2016-04-19_15-58-16/structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize", "BackTrace");
+structs$AddressStart <- as.bigz(structs$AddressStart)
+structs$AddressSize <- as.bigz(structs$AddressSize)
+structs$AddressEnd <- structs$AddressStart + structs$AddressSize
+head(structs)
+# Filter interesting data structure as soon as possible
+# The following line is specific to matrix, adapt it for other analysis
+# structs <- structs[!grepl("thread",structs$Structure),]
+str(structs)
+show(structs)
+
+# Retrieve struct infos
+nrow(k)
+# These lines are specific to matrix, adapt it for other analysis
+minA <- structs[1,2]
+maxA <- structs[nrow(structs),5]
+proc.time() - ptm
+show(minA)
+show(maxA)
+nrow(k)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+ 202.58    6.32  212.15
+            X.Virt            X.Phy Nreads Nwrites CPUMask   Start     End
+1 0000000000400040 000062000b3531f0      1       0    1011       1     234
+2 0000000000400270 000062000b3531f0      1       0   10011     243    6709
+3 0000000000400270 000062000b3531f0      1       0   10011    6709    8784
+4 0000000000400270 000062000b3531f0      1       0  100011    6709    8784
+5 0000000000400270 000062000b3531f0      1       0   10011    8784   35287
+6 000000000040055d 000062000b3531f0      1       0      11 3826621 3828417
+  TaskId Shared
+1      0      1
+2      4      1
+3      4      2
+4      1      2
+5      4      1
+6      0      1
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+  Address Reads Writes   Start     End Tid N Duration
+1 4194368     1      0       1     234   0 1      233
+2 4194928     1      0     243    6709   4 1     6466
+3 4194928     1      0    6709    8784   4 2     2075
+4 4194928     1      0    6709    8784   1 2     2075
+5 4194928     1      0    8784   35287   4 1    26503
+6 4195677     1      0 3826621 3828417   0 1     1796
+'data.frame':	52651863 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:842428708] 57 67 23 03 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 243 6709 6709 8784 3826621 3836236 1 1 8788 ...
+ $ End     : int  234 6709 8784 8784 35287 3828417 3837432 234 234 8805 ...
+ $ Tid     : int  0 4 4 1 4 0 0 0 0 0 ...
+ $ N       : int  1 1 2 2 1 1 1 1 1 1 ...
+ $ Duration: int  233 6466 2075 2075 26503 1796 1196 233 233 17 ...
+                          Structure AddressStart AddressSize BackTrace
+1 _ZN6Givaro12BlocFreeList7TabSizeE       132288        4096      <NA>
+2      _ZN6Givaro8Primes167_primesE       137536       52336      <NA>
+3     _ZN6Givaro8AdicSize8qadic_64E       189888       31752      <NA>
+4     _ZN6Givaro8AdicSize8n_max_64E       221696       31752      <NA>
+5 _ZN6Givaro12BlocFreeList7TabFreeE      2439552        4096      <NA>
+6            _ZN6GivaroL9SortedAllE      2443904        4096      <NA>
+  AddressEnd
+1     136384
+2     189872
+3     221640
+4     253448
+5    2443648
+6    2448000
+'data.frame':	18 obs. of  5 variables:
+ $ Structure   : Factor w/ 18 levels "calloc#0","__GI___pthread_keys",..: 11 16 15 13 10 18 17 14 12 2 ...
+ $ AddressStart:Class 'bigz'  raw [1:220] 12 00 00 00 ...
+ $ AddressSize :Class 'bigz'  raw [1:220] 12 00 00 00 ...
+ $ BackTrace   : Factor w/ 5 levels "moca.so:0x7f25ed61ace2:0x7f25ed61a97d/libc.so.6:0x7f25ebd6c601:0x7f25ebd9dbf6:0x7f25ebd72830/libgomp.so.1:0x7f25ec4a47b0:0x7f25"| __truncated__,..: NA NA NA NA NA NA NA NA NA NA ...
+ $ AddressEnd  :Class 'bigz'  raw [1:220] 12 00 00 00 ...
+                           Structure AddressStart AddressSize
+1  _ZN6Givaro12BlocFreeList7TabSizeE       132288        4096
+2       _ZN6Givaro8Primes167_primesE       137536       52336
+3      _ZN6Givaro8AdicSize8qadic_64E       189888       31752
+4      _ZN6Givaro8AdicSize8n_max_64E       221696       31752
+5  _ZN6Givaro12BlocFreeList7TabFreeE      2439552        4096
+6             _ZN6GivaroL9SortedAllE      2443904        4096
+7                   _ZN6GivaroL3AllE      2448000        8192
+8      _ZN6Givaro8AdicSize8qadic_53E       253504       11088
+9      _ZN6Givaro8AdicSize8n_max_53E       264640       11088
+10               __GI___pthread_keys      2196192       16384
+11                    __pthread_keys      2196192       16384
+12       _ZN6Givaro11IntPrimeDom2IPE      2412992       14068
+13      _ZN6Givaro11IntPrimeDom3IP2E      2427072       12144
+14                          calloc#0     24879104        4096
+15                          malloc#2     24925392        4096
+16                          malloc#3     24931760        4096
+17                          malloc#4     24938128        4096
+18                          malloc#1     24888912       32816
+                                                                                                                                                                                                   BackTrace
+1                                                                                                                                                                                                       <NA>
+2                                                                                                                                                                                                       <NA>
+3                                                                                                                                                                                                       <NA>
+4                                                                                                                                                                                                       <NA>
+5                                                                                                                                                                                                       <NA>
+6                                                                                                                                                                                                       <NA>
+7                                                                                                                                                                                                       <NA>
+8                                                                                                                                                                                                       <NA>
+9                                                                                                                                                                                                       <NA>
+10                                                                                                                                                                                                      <NA>
+11                                                                                                                                                                                                      <NA>
+12                                                                                                                                                                                                      <NA>
+13                                                                                                                                                                                                      <NA>
+14                                          moca.so:0x7f25ed61ace2:0x7f25ed61aa6c/libc.so.6:0x7f25ebd0740c/libquadmath.so.0:0x7f25eb345432/ld-linux-x86-64.so.2:0x7f25edc2a9fa:0x7f25edc2aae3:0x7f25edc1d1ca
+15         moca.so:0x7f25ed61ace2:0x7f25ed61a97d/libstdc++.so.6:0x7f25eca0b2e8:0x7f25eca0b399/libgivaro.so.8:0x7f25ed15b8ae:0x7f25ed151c06/ld-linux-x86-64.so.2:0x7f25edc2a9fa:0x7f25edc2aae3:0x7f25edc1d1ca
+16         moca.so:0x7f25ed61ace2:0x7f25ed61a97d/libstdc++.so.6:0x7f25eca0b2e8:0x7f25eca0b399/libgivaro.so.8:0x7f25ed15b8bc:0x7f25ed151c06/ld-linux-x86-64.so.2:0x7f25edc2a9fa:0x7f25edc2aae3:0x7f25edc1d1ca
+17         moca.so:0x7f25ed61ace2:0x7f25ed61a97d/libstdc++.so.6:0x7f25eca0b2e8:0x7f25eca0b399/libgivaro.so.8:0x7f25ed15b8ca:0x7f25ed151c06/ld-linux-x86-64.so.2:0x7f25edc2a9fa:0x7f25edc2aae3:0x7f25edc1d1ca
+18 moca.so:0x7f25ed61ace2:0x7f25ed61a97d/libc.so.6:0x7f25ebd6c601:0x7f25ebd9dbf6:0x7f25ebd72830/libgomp.so.1:0x7f25ec4a47b0:0x7f25ec499d2d/ld-linux-x86-64.so.2:0x7f25edc2a9fa:0x7f25edc2aae3:0x7f25edc1d1ca
+   AddressEnd
+1      136384
+2      189872
+3      221640
+4      253448
+5     2443648
+6     2448000
+7     2456192
+8      264592
+9      275728
+10    2212576
+11    2212576
+12    2427060
+13    2439216
+14   24883200
+15   24929488
+16   24935856
+17   24942224
+18   24921728
+[1] 52651863
+   user  system elapsed 
+ 302.60   31.52  472.25
+Big Integer ('bigz') :
+[1] 132288
+Big Integer ('bigz') :
+[1] 24921728
+[1] 52651863
+#+end_example
+
+It tooks me 8Gio of RAM and as much of swap but it seems to worked,
+let see if we still have no accesses on the data structures:
+
+#+begin_src R :results output :session :exports both
+#system.time(l <- subset(k, k$Address >= minA & k$Address <= maxA));
+system.time(l <- k[which(k$Address >= minA & k$Address <= maxA),]);
+head(l)
+str(l)
+nrow(l)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+ 52.480   7.972  90.136
+  Address Reads Writes   Start     End Tid N Duration
+1 4194368     1      0       1     234   0 1      233
+2 4194928     1      0     243    6709   4 1     6466
+3 4194928     1      0    6709    8784   4 2     2075
+4 4194928     1      0    6709    8784   1 2     2075
+5 4194928     1      0    8784   35287   4 1    26503
+6 4195677     1      0 3826621 3828417   0 1     1796
+'data.frame':	78 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:940] 4e 00 00 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 243 6709 6709 8784 3826621 3836236 1 1 8788 ...
+ $ End     : int  234 6709 8784 8784 35287 3828417 3837432 234 234 8805 ...
+ $ Tid     : int  0 4 4 1 4 0 0 0 0 0 ...
+ $ N       : int  1 1 2 2 1 1 1 1 1 1 ...
+ $ Duration: int  233 6466 2075 2075 26503 1796 1196 233 233 17 ...
+[1] 78
+#+end_example
+
+Now it's getting really weird, we have almost 100 times more accesses
+than on the first trace on only 18 more accesses inside the detected
+data structures.
+I guess there is an issue on the way addresses of structure from
+external libraries are computed. 
+
+** 2016-05-04 New try on Ziad's benchmarks                           :David:
+
+So after looking at my code, I found that I ommit the offset of the
+library on the start address of external libraries data structures.
+So I fixed it on Moca (commit
+29fce1cc0a0fa453215a9f5694d681a681fc8d8e), and I generated a new trace
+for the fgemm kernel:
+
+TODO: Add archive link and md5sum
+
+#+begin_src sh :results output :exports both :session
+cd Moca-benchmark-fgemm-2016-05-04_14-42-51
+# Already done on grid5000 (requires a huge amount of memory)
+#~/Work/Moca/src/utils/create_event_producer.sh 4096 Moca-full-trace.csv
+head Moca-framesoc.csv
+sort -n -t',' -k2 structs.csv | \
+awk -F , 'BEGIN{p="";cpt=1} {if(p==$1){n=$1"-"cpt;cpt++}\
+else{cpt=1;n=$1};p=$1;print n","$2","$3","$4}'  > structs-uniq.csv
+head  structs-uniq.csv
+#+end_src
+
+#+RESULTS:
+#+begin_example
+@Virt,@Phy,Nreads,Nwrites,CPUMask,Start,End,TaskId,Shared
+0000000000400040,0000620015929dc8,1,0,010000110,1,232,0,1
+0000000000400270,0000620015929dc8,1,0,000000110,233,238,1,1
+0000000000400270,0000620015929dc8,1,0,000000110,238,16551,1,2
+0000000000400270,0000620015929dc8,1,0,001000110,238,16551,4,2
+0000000000400270,0000620015929dc8,1,0,001000110,16551,27748,4,1
+0000000000400270,0000620015929dc8,1,0,001000110,27748,27787,4,2
+000000000040049d,0000620015929dc8,1,0,010000110,27748,27787,0,2
+000000000040049d,0000620015929dc8,1,0,010000110,27787,3554939,0,1
+00000000004006f5,0000620015929dc8,1,0,000100110,3555763,3556903,0,1
+name,addr,size,backtrace
+calloc#0,32555008,4096,moca.so:0x7f7f010c0d9b:0x7f7f010c0aac/libc.so.6:0x7f7eff7ad40c/libquadmath.so.0:0x7f7efedeb432/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+malloc#2,32601296,4096,moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libstdc++.so.6:0x7f7f004b12e8:0x7f7f004b1399/libgivaro.so.8:0x7f7f00c018ae:0x7f7f00bf7c06/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+malloc#3,32607664,4096,moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libstdc++.so.6:0x7f7f004b12e8:0x7f7f004b1399/libgivaro.so.8:0x7f7f00c018bc:0x7f7f00bf7c06/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+malloc#4,32614032,4096,moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libstdc++.so.6:0x7f7f004b12e8:0x7f7f004b1399/libgivaro.so.8:0x7f7f00c018ca:0x7f7f00bf7c06/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+malloc#1,32564816,32816,moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libc.so.6:0x7f7eff812601:0x7f7eff843bf6:0x7f7eff818830/libgomp.so.1:0x7f7efff4a7b0:0x7f7efff3fd2d/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+_ZN6Givaro12BlocFreeList7TabSizeE,939766976,4096,NA
+_ZN6Givaro12BlocFreeList7TabFreeE,942074240,4096,NA
+_ZN6GivaroL9SortedAllE,942078592,4096,NA
+_ZN6GivaroL3AllE,942082688,8192,NA
+#+end_example
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+library(gmp)
+
+
+system.time(k <- read.csv("Moca-benchmark-fgemm-2016-05-04_14-42-51/Moca-framesoc.csv", header=T));
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+# Use bigz to parse
+k$Address <- as.bigz(paste("0x", k$Address, sep=""))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Duration <- k$End - k$Start
+head(k);
+str(k)
+
+# Add structure info
+structs <- read.csv("Moca-benchmark-fgemm-2016-05-04_14-42-51/structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize", "BackTrace");
+structs$AddressStart <- as.bigz(structs$AddressStart)
+structs$AddressSize <- as.bigz(structs$AddressSize)
+structs$AddressEnd <- structs$AddressStart + structs$AddressSize
+head(structs)
+# Filter interesting data structure as soon as possible
+# The following line is specific to matrix, adapt it for other analysis
+# structs <- structs[!grepl("thread",structs$Structure),]
+str(structs)
+show(structs)
+
+# Retrieve struct infos
+nrow(k)
+# These lines are specific to matrix, adapt it for other analysis
+minA <- structs[1,2]
+maxA <- structs[nrow(structs),5]
+proc.time() - ptm
+show(minA)
+show(maxA)
+nrow(k)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+110.736   2.416 113.569
+            X.Virt            X.Phy Nreads Nwrites  CPUMask Start   End TaskId
+1 0000000000400040 0000620015929dc8      1       0 10000110     1   232      0
+2 0000000000400270 0000620015929dc8      1       0      110   233   238      1
+3 0000000000400270 0000620015929dc8      1       0      110   238 16551      1
+4 0000000000400270 0000620015929dc8      1       0  1000110   238 16551      4
+5 0000000000400270 0000620015929dc8      1       0  1000110 16551 27748      4
+6 0000000000400270 0000620015929dc8      1       0  1000110 27748 27787      4
+  Shared
+1      1
+2      1
+3      2
+4      2
+5      1
+6      2
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+  Address Reads Writes Start   End Tid N Duration
+1 4194368     1      0     1   232   0 1      231
+2 4194928     1      0   233   238   1 1        5
+3 4194928     1      0   238 16551   1 2    16313
+4 4194928     1      0   238 16551   4 2    16313
+5 4194928     1      0 16551 27748   4 1    11197
+6 4194928     1      0 27748 27787   4 2       39
+'data.frame':	31432622 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:502921048] ae 9f df 01 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 233 238 238 16551 27748 27748 27787 3555763 1 ...
+ $ End     : int  232 238 16551 16551 27748 27787 27787 3554939 3556903 232 ...
+ $ Tid     : int  0 1 1 4 4 4 0 0 0 0 ...
+ $ N       : int  1 1 2 2 1 2 2 1 1 1 ...
+ $ Duration: int  231 5 16313 16313 11197 39 39 3527152 1140 231 ...
+                          Structure AddressStart AddressSize
+1                          calloc#0     32555008        4096
+2                          malloc#2     32601296        4096
+3                          malloc#3     32607664        4096
+4                          malloc#4     32614032        4096
+5                          malloc#1     32564816       32816
+6 _ZN6Givaro12BlocFreeList7TabSizeE    939766976        4096
+                                                                                                                                                                                                  BackTrace
+1                                          moca.so:0x7f7f010c0d9b:0x7f7f010c0aac/libc.so.6:0x7f7eff7ad40c/libquadmath.so.0:0x7f7efedeb432/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+2         moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libstdc++.so.6:0x7f7f004b12e8:0x7f7f004b1399/libgivaro.so.8:0x7f7f00c018ae:0x7f7f00bf7c06/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+3         moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libstdc++.so.6:0x7f7f004b12e8:0x7f7f004b1399/libgivaro.so.8:0x7f7f00c018bc:0x7f7f00bf7c06/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+4         moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libstdc++.so.6:0x7f7f004b12e8:0x7f7f004b1399/libgivaro.so.8:0x7f7f00c018ca:0x7f7f00bf7c06/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+5 moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libc.so.6:0x7f7eff812601:0x7f7eff843bf6:0x7f7eff818830/libgomp.so.1:0x7f7efff4a7b0:0x7f7efff3fd2d/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+6                                                                                                                                                                                                      <NA>
+  AddressEnd
+1   32559104
+2   32605392
+3   32611760
+4   32618128
+5   32597632
+6  939771072
+'data.frame':	18 obs. of  5 variables:
+ $ Structure   : Factor w/ 18 levels "calloc#0","__GI___pthread_keys",..: 1 4 5 6 3 11 10 18 17 2 ...
+ $ AddressStart:Class 'bigz'  raw [1:220] 12 00 00 00 ...
+ $ AddressSize :Class 'bigz'  raw [1:220] 12 00 00 00 ...
+ $ BackTrace   : Factor w/ 5 levels "moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libc.so.6:0x7f7eff812601:0x7f7eff843bf6:0x7f7eff818830/libgomp.so.1:0x7f7efff4a7b0:0x7f7e"| __truncated__,..: 5 2 3 4 1 NA NA NA NA NA ...
+ $ AddressEnd  :Class 'bigz'  raw [1:220] 12 00 00 00 ...
+                           Structure AddressStart AddressSize
+1                           calloc#0     32555008        4096
+2                           malloc#2     32601296        4096
+3                           malloc#3     32607664        4096
+4                           malloc#4     32614032        4096
+5                           malloc#1     32564816       32816
+6  _ZN6Givaro12BlocFreeList7TabSizeE    939766976        4096
+7  _ZN6Givaro12BlocFreeList7TabFreeE    942074240        4096
+8             _ZN6GivaroL9SortedAllE    942078592        4096
+9                   _ZN6GivaroL3AllE    942082688        8192
+10               __GI___pthread_keys    924140256       16384
+11                    __pthread_keys    924140256       16384
+12      _ZN6Givaro8Primes167_primesE    939772224       52336
+13     _ZN6Givaro8AdicSize8qadic_64E    939824576       31752
+14     _ZN6Givaro8AdicSize8n_max_64E    939856384       31752
+15     _ZN6Givaro8AdicSize8qadic_53E    939888192       11088
+16     _ZN6Givaro8AdicSize8n_max_53E    939899328       11088
+17       _ZN6Givaro11IntPrimeDom2IPE    942047680       14068
+18      _ZN6Givaro11IntPrimeDom3IP2E    942061760       12144
+                                                                                                                                                                                                   BackTrace
+1                                           moca.so:0x7f7f010c0d9b:0x7f7f010c0aac/libc.so.6:0x7f7eff7ad40c/libquadmath.so.0:0x7f7efedeb432/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+2          moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libstdc++.so.6:0x7f7f004b12e8:0x7f7f004b1399/libgivaro.so.8:0x7f7f00c018ae:0x7f7f00bf7c06/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+3          moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libstdc++.so.6:0x7f7f004b12e8:0x7f7f004b1399/libgivaro.so.8:0x7f7f00c018bc:0x7f7f00bf7c06/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+4          moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libstdc++.so.6:0x7f7f004b12e8:0x7f7f004b1399/libgivaro.so.8:0x7f7f00c018ca:0x7f7f00bf7c06/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+5  moca.so:0x7f7f010c0d9b:0x7f7f010c09bd/libc.so.6:0x7f7eff812601:0x7f7eff843bf6:0x7f7eff818830/libgomp.so.1:0x7f7efff4a7b0:0x7f7efff3fd2d/ld-linux-x86-64.so.2:0x7f7f016d09fa:0x7f7f016d0ae3:0x7f7f016c31ca
+6                                                                                                                                                                                                       <NA>
+7                                                                                                                                                                                                       <NA>
+8                                                                                                                                                                                                       <NA>
+9                                                                                                                                                                                                       <NA>
+10                                                                                                                                                                                                      <NA>
+11                                                                                                                                                                                                      <NA>
+12                                                                                                                                                                                                      <NA>
+13                                                                                                                                                                                                      <NA>
+14                                                                                                                                                                                                      <NA>
+15                                                                                                                                                                                                      <NA>
+16                                                                                                                                                                                                      <NA>
+17                                                                                                                                                                                                      <NA>
+18                                                                                                                                                                                                      <NA>
+   AddressEnd
+1    32559104
+2    32605392
+3    32611760
+4    32618128
+5    32597632
+6   939771072
+7   942078336
+8   942082688
+9   942090880
+10  924156640
+11  924156640
+12  939824560
+13  939856328
+14  939888136
+15  939899280
+16  939910416
+17  942061748
+18  942073904
+[1] 31432622
+   user  system elapsed 
+159.208   5.912 173.132
+Big Integer ('bigz') :
+[1] 32555008
+Big Integer ('bigz') :
+[1] 942073904
+[1] 31432622
+#+end_example
+
+Same as yesterday: slow and heavy but it works ...
+
+#+begin_src R :results output :session :exports both
+#system.time(l <- subset(k, k$Address >= minA & k$Address <= maxA));
+system.time(l <- k[which(k$Address >= minA & k$Address <= maxA),]);
+#head(l)
+str(l)
+nrow(l)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+ 27.920   2.312  32.873
+'data.frame':	0 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:4] 00 00 00 00
+ $ Reads   : int 
+ $ Writes  : int 
+ $ Start   : int 
+ $ End     : int 
+ $ Tid     : int 
+ $ N       : int 
+ $ Duration: int
+[1] 0
+#+end_example
+
+Now it's getting really weird, we have almost 100 times more accesses
+than on the first trace on only 18 more accesses inside the detected
+data structures. So I guess this benchmark is mostly working on data
+structures from external libraries ... 
+
+** 2016-05-06 Yet another try on fgemm                               :David:
+
+It seems that on the previous traces, the addresse space randomization
+wasn't turned off thus none of the structure address was correct ...
+
+TODO: Add archive link and md5sum
+
+#+begin_src sh :results output :exports both :session
+cd Moca-benchmark-fgemm-2016-05-06_18-00-50
+# Already done on grid5000 (requires a huge amount of memory)
+#~/Work/Moca/src/utils/create_event_producer.sh 4096 Moca-full-trace.csv
+head Moca-framesoc.csv
+sort -n -t',' -k2 structs.csv | \
+awk -F , 'BEGIN{p="";cpt=1} {if(p==$1){n=$1"-"cpt;cpt++}\
+else{cpt=1;n=$1};p=$1;print n","$2","$3","$4}'  > structs-uniq.csv
+head  structs-uniq.csv
+#+end_src
+
+#+RESULTS:
+#+begin_example
+@Virt,@Phy,Nreads,Nwrites,CPUMask,Start,End,TaskId,Shared
+0000000000400040,000062000b0d1560,1,0,000100000,1,236,0,1
+0000000000400040,000062000b0d1560,1,0,000100000,236,238,0,2
+0000000000400270,000062000b0d1560,1,0,000010110,236,238,2,2
+0000000000400270,000062000b0d1560,1,0,000010110,238,239,2,1
+0000000000400270,000062000b0d1560,1,0,000010110,239,239,2,2
+0000000000400270,000062000b0d1560,1,0,000100000,239,239,0,2
+0000000000400270,000062000b0d1560,1,0,000010110,239,8444,2,3
+0000000000400270,000062000b0d1560,1,0,000100000,239,8444,0,3
+0000000000400270,000062000b0d1560,1,0,000001110,239,8444,3,3
+name,addr,size,backtrace
+calloc#0,6549504,4096,moca.so:0x7ffff77dad9b:0x7ffff77daaac/libc.so.6:0x7ffff5ec740c/libquadmath.so.0:0x7ffff5505432/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#2,6595792,4096,moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ae:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#3,6602160,4096,moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8bc:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#4,6608528,4096,moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ca:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#1,6559312,32816,moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7ffff6659d2d/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+_ZN6Givaro12BlocFreeList7TabSizeE,18446744073570309312,4096,NA
+_ZN6Givaro12BlocFreeList7TabFreeE,18446744073572616576,4096,NA
+_ZN6GivaroL9SortedAllE,18446744073572620928,4096,NA
+_ZN6GivaroL3AllE,18446744073572625024,8192,NA
+#+end_example
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+library(gmp)
+
+
+system.time(k <- read.csv("Moca-benchmark-fgemm-2016-05-06_18-00-50/Moca-framesoc.csv", header=T));
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+# Use bigz to parse
+k$Address <- as.bigz(paste("0x", k$Address, sep=""))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Duration <- k$End - k$Start
+head(k);
+str(k)
+
+# Add structure info
+structs <- read.csv("Moca-benchmark-fgemm-2016-05-06_18-00-50/structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize", "BackTrace");
+structs$AddressStart <- as.bigz(structs$AddressStart)
+structs$AddressSize <- as.bigz(structs$AddressSize)
+structs$AddressEnd <- structs$AddressStart + structs$AddressSize
+head(structs)
+# Filter interesting data structure as soon as possible
+# The following line is specific to matrix, adapt it for other analysis
+# structs <- structs[!grepl("thread",structs$Structure),]
+str(structs)
+show(structs)
+
+# Retrieve struct infos
+nrow(k)
+# These lines are specific to matrix, adapt it for other analysis
+minA <- structs[1,2] # I'm only interested on the givaro structs
+maxA <- structs[5,5];
+proc.time() - ptm
+show(minA)
+show(maxA)
+nrow(k)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+147.060   4.828 157.618
+            X.Virt            X.Phy Nreads Nwrites CPUMask Start End TaskId
+1 0000000000400040 000062000b0d1560      1       0  100000     1 236      0
+2 0000000000400040 000062000b0d1560      1       0  100000   236 238      0
+3 0000000000400270 000062000b0d1560      1       0   10110   236 238      2
+4 0000000000400270 000062000b0d1560      1       0   10110   238 239      2
+5 0000000000400270 000062000b0d1560      1       0   10110   239 239      2
+6 0000000000400270 000062000b0d1560      1       0  100000   239 239      0
+  Shared
+1      1
+2      2
+3      2
+4      1
+5      2
+6      2
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+  Address Reads Writes Start End Tid N Duration
+1 4194368     1      0     1 236   0 1      235
+2 4194368     1      0   236 238   0 2        2
+3 4194928     1      0   236 238   2 2        2
+4 4194928     1      0   238 239   2 1        1
+5 4194928     1      0   239 239   2 2        0
+6 4194928     1      0   239 239   0 2        0
+'data.frame':	39824448 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:637189564] 40 ac 5f 02 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 236 236 238 239 239 239 239 239 8444 ...
+ $ End     : int  236 238 238 239 239 239 8444 8444 8444 15658 ...
+ $ Tid     : int  0 0 2 2 2 0 2 0 3 2 ...
+ $ N       : int  1 2 2 1 2 2 3 3 3 2 ...
+ $ Duration: int  235 2 2 1 0 0 8205 8205 8205 7214 ...
+                          Structure         AddressStart AddressSize
+1                          calloc#0              6549504        4096
+2                          malloc#2              6595792        4096
+3                          malloc#3              6602160        4096
+4                          malloc#4              6608528        4096
+5                          malloc#1              6559312       32816
+6 _ZN6Givaro12BlocFreeList7TabSizeE 18446744073570310144        4096
+                                                                                                                                                                                                  BackTrace
+1                                          moca.so:0x7ffff77dad9b:0x7ffff77daaac/libc.so.6:0x7ffff5ec740c/libquadmath.so.0:0x7ffff5505432/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+2         moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ae:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+3         moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8bc:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+4         moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ca:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+5 moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7ffff6659d2d/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+6                                                                                                                                                                                                      <NA>
+            AddressEnd
+1              6553600
+2              6599888
+3              6606256
+4              6612624
+5              6592128
+6 18446744073570314240
+'data.frame':	18 obs. of  5 variables:
+ $ Structure   : Factor w/ 18 levels "calloc#0","__GI___pthread_keys",..: 1 4 5 6 3 11 10 18 17 2 ...
+ $ AddressStart:Class 'bigz'  raw [1:272] 12 00 00 00 ...
+ $ AddressSize :Class 'bigz'  raw [1:220] 12 00 00 00 ...
+ $ BackTrace   : Factor w/ 5 levels "moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7fff"| __truncated__,..: 5 2 3 4 1 NA NA NA NA NA ...
+ $ AddressEnd  :Class 'bigz'  raw [1:272] 12 00 00 00 ...
+                           Structure         AddressStart AddressSize
+1                           calloc#0              6549504        4096
+2                           malloc#2              6595792        4096
+3                           malloc#3              6602160        4096
+4                           malloc#4              6608528        4096
+5                           malloc#1              6559312       32816
+6  _ZN6Givaro12BlocFreeList7TabSizeE 18446744073570310144        4096
+7  _ZN6Givaro12BlocFreeList7TabFreeE 18446744073572616192        4096
+8             _ZN6GivaroL9SortedAllE 18446744073572620288        4096
+9                   _ZN6GivaroL3AllE 18446744073572624384        8192
+10               __GI___pthread_keys 18446744073554669568       16384
+11                    __pthread_keys 18446744073554669568       16384
+12      _ZN6Givaro8Primes167_primesE 18446744073570314240       52336
+13     _ZN6Givaro8AdicSize8qadic_64E 18446744073570367488       31752
+14     _ZN6Givaro8AdicSize8n_max_64E 18446744073570398208       31752
+15     _ZN6Givaro8AdicSize8qadic_53E 18446744073570430976       11088
+16     _ZN6Givaro8AdicSize8n_max_53E 18446744073570441216       11088
+17       _ZN6Givaro11IntPrimeDom2IPE 18446744073572589568       14068
+18      _ZN6Givaro11IntPrimeDom3IP2E 18446744073572603904       12144
+                                                                                                                                                                                                   BackTrace
+1                                           moca.so:0x7ffff77dad9b:0x7ffff77daaac/libc.so.6:0x7ffff5ec740c/libquadmath.so.0:0x7ffff5505432/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+2          moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ae:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+3          moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8bc:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+4          moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ca:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+5  moca.so:0x7ffff77dad9b:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7ffff6659d2d/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+6                                                                                                                                                                                                       <NA>
+7                                                                                                                                                                                                       <NA>
+8                                                                                                                                                                                                       <NA>
+9                                                                                                                                                                                                       <NA>
+10                                                                                                                                                                                                      <NA>
+11                                                                                                                                                                                                      <NA>
+12                                                                                                                                                                                                      <NA>
+13                                                                                                                                                                                                      <NA>
+14                                                                                                                                                                                                      <NA>
+15                                                                                                                                                                                                      <NA>
+16                                                                                                                                                                                                      <NA>
+17                                                                                                                                                                                                      <NA>
+18                                                                                                                                                                                                      <NA>
+             AddressEnd
+1               6553600
+2               6599888
+3               6606256
+4               6612624
+5               6592128
+6  18446744073570314240
+7  18446744073572620288
+8  18446744073572624384
+9  18446744073572632576
+10 18446744073554685952
+11 18446744073554685952
+12 18446744073570366576
+13 18446744073570399240
+14 18446744073570429960
+15 18446744073570442064
+16 18446744073570452304
+17 18446744073572603636
+18 18446744073572616048
+[1] 39824448
+   user  system elapsed 
+ 209.90   11.32  245.20
+Big Integer ('bigz') :
+[1] 6549504
+Big Integer ('bigz') :
+[1] 6592128
+[1] 39824448
+#+end_example
+
+Same as yesterday: slow and heavy but it works ...
+
+#+begin_src R :results output :session :exports both
+#system.time(l <- subset(k, k$Address >= minA & k$Address <= maxA));
+system.time(l <- k[which(k$Address >= minA & k$Address <= maxA),]);
+#head(l)
+str(l)
+nrow(l)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+  0.264   0.176   0.440 
+Warning messages:
+1: In Ops.factor(k$Address, minA) : ‘>=’ not meaningful for factors
+2: In Ops.factor(k$Address, maxA) : ‘<=’ not meaningful for factors
+'data.frame':	0 obs. of  8 variables:
+ $ Address : Factor w/ 32288 levels "0000000000400040",..: 
+ $ Reads   : int 
+ $ Writes  : int 
+ $ Start   : int 
+ $ End     : int 
+ $ Tid     : int 
+ $ N       : int 
+ $ Duration: int
+[1] 0
+#+end_example
+
+Most accesses are between the malloc'ed structures and the others, I
+guess something on the computation of dynamic library structures ...
+
+* 2016-05-12 fflas-fgemm                                              :David:
+
+There was some issue on the external library adresses computation due
+to unsafe operations between integer and long integer ...
+
+As usual the archive is on ligcloud:
+
+https://ligcloud.imag.fr/public.php?service=files&t=01e8c0d900b6092ab7f8c6925e98db3a
+
+#+begin_src sh :results output :exports both :session
+md5sum fgemm.tgz
+#+end_src
+
+#+RESULTS:
+: 7f7106d3aa4cdc43765682e5a6ab5f41  fgemm.tgz
+
+
+#+begin_src sh :results output :exports both :session
+cd Moca-benchmark-fgemm-2016-05-12_13-32-51
+# Already done on grid5000 (requires a huge amount of memory)
+#~/Work/Moca/src/utils/create_event_producer.sh 4096 Moca-full-trace.csv
+head Moca-framesoc.csv
+sort -n -t',' -k2 structs.csv | \
+awk -F , 'BEGIN{p="";cpt=1} {if(p==$1){n=$1"-"cpt;cpt++}\
+else{cpt=1;n=$1};p=$1;print n","$2","$3","$4}'  > structs-uniq.csv
+head  structs-uniq.csv
+#+end_src
+
+#+RESULTS:
+#+begin_example
+@Virt,@Phy,Nreads,Nwrites,CPUMask,Start,End,TaskId,Shared
+0000000000400040,000062000285ea70,1,0,000001011,1,231,0,1
+0000000000400270,000062000285ea70,1,0,000000011,233,238,2,1
+0000000000400270,000062000285ea70,1,0,000000011,238,8429,2,2
+0000000000400270,000062000285ea70,1,0,001000011,238,8429,4,2
+0000000000400270,000062000285ea70,1,0,000000011,8429,9716,2,3
+0000000000400270,000062000285ea70,1,0,001000011,8429,9716,4,3
+000000000040049d,000062000285ea70,1,0,000001011,8429,9716,0,3
+0000000000400270,000062000285ea70,1,0,000000011,9716,26187,2,2
+000000000040049d,000062000285ea70,1,0,000001011,9716,26187,0,2
+name,addr,size,backtrace
+calloc#0,6549504,4096,moca.so:0x7ffff77dad9d:0x7ffff77daaac/libc.so.6:0x7ffff5ec740c/libquadmath.so.0:0x7ffff5505432/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#2,6595792,4096,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ae:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#3,6602160,4096,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8bc:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#4,6608528,4096,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ca:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#1,6559312,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7ffff6659d2d/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+_ZN6Givaro12BlocFreeList7TabSizeE,140737349113024,4096,NA
+_ZN6Givaro12BlocFreeList7TabFreeE,140737351420288,4096,NA
+_ZN6GivaroL9SortedAllE,140737351424640,4096,NA
+_ZN6GivaroL3AllE,140737351428736,8192,NA
+#+end_example
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+library(gmp)
+
+
+system.time(k <- read.csv("Moca-benchmark-fgemm-2016-05-12_13-32-51/Moca-framesoc.csv", header=T));
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+# Use bigz to parse
+k$Address <- as.bigz(paste("0x", k$Address, sep=""))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Duration <- k$End - k$Start
+head(k);
+str(k)
+
+# Add structure info
+structs <- read.csv("Moca-benchmark-fgemm-2016-05-12_13-32-51/structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize", "BackTrace");
+structs$AddressStart <- as.bigz(structs$AddressStart)
+structs$AddressSize <- as.bigz(structs$AddressSize)
+structs$AddressEnd <- structs$AddressStart + structs$AddressSize
+head(structs)
+# Filter interesting data structure as soon as possible
+# The following line is specific to matrix, adapt it for other analysis
+# structs <- structs[!grepl("thread",structs$Structure),]
+str(structs)
+show(structs)
+
+# Retrieve struct infos
+nrow(k)
+# These lines are specific to matrix, adapt it for other analysis
+minA <- structs[1,2]
+maxA <- structs[nrow(structs),5];
+proc.time() - ptm
+show(minA)
+show(maxA)
+nrow(k)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+ 100.68    2.16  102.95
+            X.Virt            X.Phy Nreads Nwrites CPUMask Start  End TaskId
+1 0000000000400040 000062000285ea70      1       0    1011     1  231      0
+2 0000000000400270 000062000285ea70      1       0      11   233  238      2
+3 0000000000400270 000062000285ea70      1       0      11   238 8429      2
+4 0000000000400270 000062000285ea70      1       0 1000011   238 8429      4
+5 0000000000400270 000062000285ea70      1       0      11  8429 9716      2
+6 0000000000400270 000062000285ea70      1       0 1000011  8429 9716      4
+  Shared
+1      1
+2      1
+3      2
+4      2
+5      3
+6      3
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+  Address Reads Writes Start  End Tid N Duration
+1 4194368     1      0     1  231   0 1      230
+2 4194928     1      0   233  238   2 1        5
+3 4194928     1      0   238 8429   2 2     8191
+4 4194928     1      0   238 8429   4 2     8191
+5 4194928     1      0  8429 9716   2 3     1287
+6 4194928     1      0  8429 9716   4 3     1287
+'data.frame':	26757413 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:428117432] 25 49 98 01 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 233 238 238 8429 8429 8429 9716 9716 26187 ...
+ $ End     : int  231 238 8429 8429 9716 9716 9716 26187 26187 26212 ...
+ $ Tid     : int  0 2 2 4 2 4 0 2 0 0 ...
+ $ N       : int  1 1 2 2 3 3 3 2 2 1 ...
+ $ Duration: int  230 5 8191 8191 1287 1287 1287 16471 16471 25 ...
+                          Structure    AddressStart AddressSize
+1                          calloc#0         6549504        4096
+2                          malloc#2         6595792        4096
+3                          malloc#3         6602160        4096
+4                          malloc#4         6608528        4096
+5                          malloc#1         6559312       32816
+6 _ZN6Givaro12BlocFreeList7TabSizeE 140737349113024        4096
+                                                                                                                                                                                                  BackTrace
+1                                          moca.so:0x7ffff77dad9d:0x7ffff77daaac/libc.so.6:0x7ffff5ec740c/libquadmath.so.0:0x7ffff5505432/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+2         moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ae:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+3         moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8bc:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+4         moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ca:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+5 moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7ffff6659d2d/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+6                                                                                                                                                                                                      <NA>
+       AddressEnd
+1         6553600
+2         6599888
+3         6606256
+4         6612624
+5         6592128
+6 140737349117120
+'data.frame':	18 obs. of  5 variables:
+ $ Structure   : Factor w/ 18 levels "__GI___pthread_keys",..: 14 16 17 18 15 6 5 13 12 1 ...
+ $ AddressStart:Class 'bigz'  raw [1:272] 12 00 00 00 ...
+ $ AddressSize :Class 'bigz'  raw [1:220] 12 00 00 00 ...
+ $ BackTrace   : Factor w/ 5 levels "moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7fff"| __truncated__,..: 5 2 3 4 1 NA NA NA NA NA ...
+ $ AddressEnd  :Class 'bigz'  raw [1:272] 12 00 00 00 ...
+                           Structure    AddressStart AddressSize
+1                           calloc#0         6549504        4096
+2                           malloc#2         6595792        4096
+3                           malloc#3         6602160        4096
+4                           malloc#4         6608528        4096
+5                           malloc#1         6559312       32816
+6  _ZN6Givaro12BlocFreeList7TabSizeE 140737349113024        4096
+7  _ZN6Givaro12BlocFreeList7TabFreeE 140737351420288        4096
+8             _ZN6GivaroL9SortedAllE 140737351424640        4096
+9                   _ZN6GivaroL3AllE 140737351428736        8192
+10               __GI___pthread_keys 140737333474016       16384
+11                    __pthread_keys 140737333474016       16384
+12      _ZN6Givaro8Primes167_primesE 140737349118272       52336
+13     _ZN6Givaro8AdicSize8qadic_64E 140737349170624       31752
+14     _ZN6Givaro8AdicSize8n_max_64E 140737349202432       31752
+15     _ZN6Givaro8AdicSize8qadic_53E 140737349234240       11088
+16     _ZN6Givaro8AdicSize8n_max_53E 140737349245376       11088
+17       _ZN6Givaro11IntPrimeDom2IPE 140737351393728       14068
+18      _ZN6Givaro11IntPrimeDom3IP2E 140737351407808       12144
+                                                                                                                                                                                                   BackTrace
+1                                           moca.so:0x7ffff77dad9d:0x7ffff77daaac/libc.so.6:0x7ffff5ec740c/libquadmath.so.0:0x7ffff5505432/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+2          moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ae:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+3          moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8bc:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+4          moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ca:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+5  moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7ffff6659d2d/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+6                                                                                                                                                                                                       <NA>
+7                                                                                                                                                                                                       <NA>
+8                                                                                                                                                                                                       <NA>
+9                                                                                                                                                                                                       <NA>
+10                                                                                                                                                                                                      <NA>
+11                                                                                                                                                                                                      <NA>
+12                                                                                                                                                                                                      <NA>
+13                                                                                                                                                                                                      <NA>
+14                                                                                                                                                                                                      <NA>
+15                                                                                                                                                                                                      <NA>
+16                                                                                                                                                                                                      <NA>
+17                                                                                                                                                                                                      <NA>
+18                                                                                                                                                                                                      <NA>
+        AddressEnd
+1          6553600
+2          6599888
+3          6606256
+4          6612624
+5          6592128
+6  140737349117120
+7  140737351424384
+8  140737351428736
+9  140737351436928
+10 140737333490400
+11 140737333490400
+12 140737349170608
+13 140737349202376
+14 140737349234184
+15 140737349245328
+16 140737349256464
+17 140737351407796
+18 140737351419952
+[1] 26757413
+   user  system elapsed 
+142.800   4.424 149.528
+Big Integer ('bigz') :
+[1] 6549504
+Big Integer ('bigz') :
+[1] 140737351419952
+[1] 26757413
+#+end_example
+
+Same as usual slow and heavy but it works ...
+
+#+begin_src R :results output :session :exports both
+#system.time(l <- subset(k, k$Address >= minA & k$Address <= maxA));
+system.time(l <- k[which(k$Address >= minA & k$Address <= maxA),]);
+#head(l)
+str(l)
+nrow(l)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+ 31.808   3.556  42.115
+'data.frame':	26757213 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:428114452] 5d 48 98 01 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  1 1 1 1 1 1 1 1 1 0 ...
+ $ Start   : int  1 1 1 1 1 1 1 1 233 6306353 ...
+ $ End     : int  231 231 231 231 231 231 231 231 26187 8540855 ...
+ $ Tid     : int  0 0 0 0 0 0 0 0 2 0 ...
+ $ N       : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Duration: int  230 230 230 230 230 230 230 230 25954 2234502 ...
+[1] 26757213
+#+end_example
+
+So far so good, let's continue
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+
+# Compute accesses type
+
+m <- l
+system.time(m$aType <- ifelse(m$Write >0,"Write", "Read"));
+system.time(m$sType <- ifelse(m$N > 1,"Shared","Private"));
+system.time(m$Type <- paste(m$sType,m$aType,sep="_"));
+m$sType <- NULL
+m$aType <- NULL
+head(m)
+
+# Compute data structure name and offset
+n <- m
+structs$BackTrace <- NULL
+head(structs)
+getStructReverse <- function (vect){
+  name <- 1
+  start <- 2
+  end <- 4
+  return (ifelse(n$Address >= vect[start] & n$Address <= vect[end],
+                paste(vect[name],as.bigz(n$Address) - as.bigz(vect[start]),sep="@"),""));
+}
+system.time(ans <- as.data.frame(apply(structs,1,getStructReverse)))
+system.time(vect <- apply(ans,1,paste,collapse=""));
+#str(vect)
+system.time(vect <- strsplit(vect,"@"))
+#str(vect)
+system.time(n$Structure <- unlist(lapply(vect,"[",1)))
+system.time(n$Offset <- as.integer(unlist(lapply(vect,"[",2))));
+#str(n)
+head(n)
+nrow(n)
+
+# Aggregate
+system.time(o <- aggregate(n[,c('Reads','Writes', 'N')],n[,c('Structure','Offset', 'Type', 'Start', 'End')], function(d) sum(d)));
+str(o)
+head(o)
+
+proc.time() - ptm
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+  5.760   0.012   5.777
+   user  system elapsed 
+  5.852   0.000   5.852
+   user  system elapsed 
+  4.456   0.004   4.468
+   Address Reads Writes Start End Tid N Duration          Type
+56 6549504     1      1     1 231   0 1      230 Private_Write
+57 6553608     1      1     1 231   0 1      230 Private_Write
+58 6563976     1      1     1 231   0 1      230 Private_Write
+59 6573560     1      1     1 231   0 1      230 Private_Write
+60 6574088     1      1     1 231   0 1      230 Private_Write
+61 6579192     1      1     1 231   0 1      230 Private_Write
+                          Structure    AddressStart AddressSize      AddressEnd
+1                          calloc#0         6549504        4096         6553600
+2                          malloc#2         6595792        4096         6599888
+3                          malloc#3         6602160        4096         6606256
+4                          malloc#4         6608528        4096         6612624
+5                          malloc#1         6559312       32816         6592128
+6 _ZN6Givaro12BlocFreeList7TabSizeE 140737349113024        4096 140737349117120
+   user  system elapsed 
+ 735.29   71.86 1033.03
+   user  system elapsed 
+  364.4   158.0  1721.5
+   user  system elapsed 
+  2.288   0.020   2.308
+   user  system elapsed 
+  31.41    0.30   31.75
+   user  system elapsed 
+ 14.836   0.288  15.179
+   Address Reads Writes Start End Tid N Duration          Type Structure Offset
+56 6549504     1      1     1 231   0 1      230 Private_Write  calloc#0      0
+57 6553608     1      1     1 231   0 1      230 Private_Write      <NA>     NA
+58 6563976     1      1     1 231   0 1      230 Private_Write  malloc#1   4664
+59 6573560     1      1     1 231   0 1      230 Private_Write  malloc#1  14248
+60 6574088     1      1     1 231   0 1      230 Private_Write  malloc#1  14776
+61 6579192     1      1     1 231   0 1      230 Private_Write  malloc#1  19880
+[1] 26757213
+   user  system elapsed 
+  0.836   0.220   1.997
+'data.frame':	92 obs. of  8 variables:
+ $ Structure: chr  "_ZN6Givaro8AdicSize8n_max_64E" "_ZN6Givaro8AdicSize8n_max_64E" "calloc#0" "malloc#1" ...
+ $ Offset   : int  20744 20744 0 4664 7824 14248 14776 19880 21040 23992 ...
+ $ Type     : chr  "Private_Read" "Private_Read" "Private_Write" "Private_Write" ...
+ $ Start    : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ End      : int  1 231 231 231 231 231 231 231 231 231 ...
+ $ Reads    : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes   : int  0 0 1 1 1 1 1 1 1 1 ...
+ $ N        : int  1 1 1 1 1 1 1 1 1 1 ...
+                      Structure Offset          Type Start End Reads Writes N
+1 _ZN6Givaro8AdicSize8n_max_64E  20744  Private_Read     1   1     1      0 1
+2 _ZN6Givaro8AdicSize8n_max_64E  20744  Private_Read     1 231     1      0 1
+3                      calloc#0      0 Private_Write     1 231     1      1 1
+4                      malloc#1   4664 Private_Write     1 231     1      1 1
+5 _ZN6Givaro8AdicSize8n_max_53E   7824 Private_Write     1 231     1      1 1
+6                      malloc#1  14248 Private_Write     1 231     1      1 1
+   user  system elapsed 
+ 1198.3   241.6  2920.8
+#+end_example
+
+There are a lots of datastructure here, let's start by finding the
+interesting ones in terms of sharing:
+
+#+begin_src R :results output graphics :file img/struct_importance_share_fgemm.png :exports both :width 600 :height 400 :session
+library(plyr)
+q <- ddply(o,.(Structure),summarize,Share=sum(N),Nacc=sum(Reads+Writes))
+library(ggplot2);
+p <- ggplot(q,aes(x=Structure,y=Share, fill=Structure)) +
+  geom_bar(stat="identity") +
+  theme_bw() +
+  theme(panel.grid.minor = element_line(colour = "black", linetype="dashed", size = 0.1),
+    panel.grid.major = element_line(colour = "black", size = 0.1)) +
+  scale_y_log10()
+  #lab=("Data structure name") +
+  #ylab=("Number of accesses") +
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/struct_importance_share_fgemm.png]]
+
+
+and in terms of number of accesses:
+
+#+begin_src R :results output graphics :file img/struct_importance_nacc_fgemm.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q,aes(x=Structure,y=Nacc, fill=Structure)) +
+  geom_bar(stat="identity") +
+  theme_bw() +
+  theme(panel.grid.minor = element_line(colour = "black", linetype="dashed", size = 0.1),
+    panel.grid.major = element_line(colour = "black", size = 0.1)) +
+  scale_y_log10()
+  #lab=("Data structure name") +
+  #ylab=("Number of accesses") +
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/struct_importance_nacc_fgemm.png]]
+
+This is not a lot of accesses, I thinks there might be some issues during
+the aggregation (R code) ...
+
+#+begin_src R :results output graphics :file img/intensity_Rw_fgemm.png :exports both :width 600 :height 400 :session
+r <- o[grep("(malloc#1|malloc#2|malloc#4|64E)",o$Structure),]
+library(ggplot2);
+p <- ggplot(r) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=Reads+Writes)) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_Rw_fgemm.png]]
+
+
+So we don't see a lot of things here, I really think that there is
+some issue with the aggregation phase ...
