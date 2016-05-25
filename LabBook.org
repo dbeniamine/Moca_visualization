@@ -8836,8 +8836,14 @@ nrow(k)
 
 #+RESULTS:
 #+begin_example
+
+Attaching package: ‘gmp’
+
+The following objects are masked from ‘package:base’:
+
+    %*%, apply, crossprod, matrix, tcrossprod
    user  system elapsed 
- 98.488   1.708 100.255
+ 102.44    1.94  104.44
             X.Virt            X.Phy Nreads Nwrites CPUMask Start  End TaskId
 1 0000000000400040 000062000285ea70      1       0    1011     1  231      0
 2 0000000000400270 000062000285ea70      1       0      11   233  238      2
@@ -8912,7 +8918,7 @@ nrow(k)
 28        stack 140737488216064      135168      <NA> 140737488351232
 [1] 26757413
    user  system elapsed 
-137.716   3.536 143.541
+  144.0     5.4   151.6
 Big Integer ('bigz') :
 [1] 140734104526848
 Big Integer ('bigz') :
@@ -8931,7 +8937,7 @@ nrow(l)
 #+RESULTS:
 #+begin_example
    user  system elapsed 
- 33.268   5.556  55.546
+  32.16    3.30   45.58
 'data.frame':	26757095 obs. of  8 variables:
  $ Address :Class 'bigz'  raw [1:428113524] e7 47 98 01 ...
  $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
@@ -8993,11 +8999,11 @@ proc.time() - ptm
 #+RESULTS:
 #+begin_example
    user  system elapsed 
-  5.816   0.004   5.834
+  5.752   0.000   5.757
    user  system elapsed 
-  5.768   0.016   5.787
+  5.936   0.028   5.969
    user  system elapsed 
-  4.964   0.000   4.967
+  4.676   0.000   4.682
             Address Reads Writes   Start     End Tid N Duration          Type
 319 140734104651096     1      1       1     231   0 1      230 Private_Write
 320 140736683048976     1      1 1684270 1746951   3 1    62681 Private_Write
@@ -9013,15 +9019,15 @@ proc.time() - ptm
 10 stack:1391 140737254096896     8388608 140737262485504
 11 stack:1390 140737262489600     8388608 140737270878208
    user  system elapsed 
- 727.07   48.57  856.72
+ 728.63   44.07  830.03
    user  system elapsed 
- 219.74    3.58  231.79
+215.892   4.056 224.197
    user  system elapsed 
-  2.300   0.000   2.301
+  2.348   0.008   2.358
    user  system elapsed 
- 30.176   0.452  30.641
+ 31.648   0.472  32.144
    user  system elapsed 
- 14.264   0.228  14.498 
+ 16.964   0.284  17.270 
 Warning message:
 In system.time(n$Offset <- as.integer(unlist(lapply(vect, "[", 2)))) :
   NAs introduced by coercion
@@ -9041,7 +9047,7 @@ In system.time(n$Offset <- as.integer(unlist(lapply(vect, "[", 2)))) :
 324      <NA>     NA
 [1] 26757095
    user  system elapsed 
-  1.460   0.316   2.752
+  1.576   0.328   2.805
 'data.frame':	18226 obs. of  8 variables:
  $ Structure: chr  "stack" "stack" "stack" "stack" ...
  $ Offset   : int  135114 124248 131016 134553 135114 8384312 8384312 8384312 8384312 8384312 ...
@@ -9059,7 +9065,7 @@ In system.time(n$Offset <- as.integer(unlist(lapply(vect, "[", 2)))) :
 5      stack  135114 Private_Write     1 231     1      1 1
 6 stack:1389 8384312 Private_Write     1 231     1      1 1
    user  system elapsed 
-1045.18   62.23 1245.59
+1046.94   56.95 1210.24
 #+end_example
 
 That was slow but it worked
@@ -9149,3 +9155,47 @@ p
 
 Ok we start to see something here but it's quite late and I have to
 go, so we'll continue here tomorrow
+
+** Continuing on fflas traces
+
+So from the previous pictures it seems that:
+- Most of the accesses happens in the stacks.
+- The stack usage is not balanced neither over the time nor between
+  the threads.
+- All stacks but one are used privately.
+- The shared stack is only shared on read mode at the end of the execution.
+  
+Remaining questions:
+1. By how many threads is shared the stack 1388 ?
+2. Why do we see such different patterns for instance between the
+  threads ?
+3. I this repartition deterministic ?
+  
+   
+To answer the first let's re run the analysis and plot the number of
+threads using the stack 1388:
+
+
+#+begin_src R :results output graphics :file img/intensity_Share_fgemm_stack_zoom.png :exports both :width 600 :height 400 :session
+r <- o[grep("1388",o$Structure),]
+library(ggplot2);
+p <- ggplot(r) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=as.factor(N))) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_Share_fgemm_stack_zoom.png]]
+
+
+The sharing happens between 4 to 6 threads which is not neglectible
+and might be slow on NUMA machines.
+
+I am wondering if this is an issue on every fflas-lapack benchmarks or
+only on the fgemm kernel. Before going into the code, I will redo this
+analysis on some other benchmarks.
