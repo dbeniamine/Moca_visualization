@@ -8738,7 +8738,6 @@ static ones.
 
 ** Exploring the gap 
 
-
 By looking at the /proc/pid/map files, it seems that my static data
 structure detection is fine, so most of the accesses appears to be on
 the stacks and the stack detection inside Moca was not complete so I
@@ -9199,3 +9198,691 @@ and might be slow on NUMA machines.
 I am wondering if this is an issue on every fflas-lapack benchmarks or
 only on the fgemm kernel. Before going into the code, I will redo this
 analysis on some other benchmarks.
+
+* 2016-05-25 fflas-lapack: dgemm                                      :David:
+
+Let's redo the same analysis on the dgemm benchmark trace:
+#+begin_src sh :results output :exports both :session
+cd Moca-benchmark-dgemm-2016-05-25_15-58-51
+# Already done on grid5000 (requires a huge amount of memory)
+#~/Work/Moca/src/utils/create_event_producer.sh 4096 Moca-full-trace.csv
+#~/Work/Moca/src/utils/retrieve_stacks.sh stacks.log structs.csv
+head Moca-framesoc.csv
+sort -n -t',' -k2,2 structs.csv | \
+awk -F , 'BEGIN{p="";cpt=1} {if(p==$1){n=$1"-"cpt;cpt++}\
+else{cpt=1;n=$1};p=$1;print n","$2","$3","$4}'  > structs-uniq.csv
+head  structs-uniq.csv
+#+end_src
+
+#+RESULTS:
+#+begin_example
+@Virt,@Phy,Nreads,Nwrites,CPUMask,Start,End,TaskId,Shared
+0000000000400040,0000620015863278,1,0,000001011,1,241,0,1
+0000000000400270,0000620015863278,1,0,000001011,250,15935,0,1
+000000000040065d,000000000040065d,1,0,000001011,6434259,6435196,0,1
+0000000000405435,000062000b1c6ec8,1,0,000000111,1,241,0,1
+000000000041d800,000000000041d800,1,0,000000111,1,241,0,1
+0000000000420fa0,0000000000420fa0,1,0,000000111,1,241,0,1
+0000000000433950,0000000000433950,1,0,000000111,1,241,0,1
+000000000044677a,000000000044677a,1,0,000000111,1,241,0,1
+000000000045dca0,000000000045dca0,1,0,000000111,1,241,0,1
+name,addr,size,backtrace
+calloc#0,6373376,4096,moca.so:0x7ffff77dad9d:0x7ffff77daaac/libc.so.6:0x7ffff5ec740c/libquadmath.so.0:0x7ffff5505432/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#1,6383184,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7ffff6659d2d/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#2,6419664,4096,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ae:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#3,6426032,4096,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8bc:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#4,6432400,4096,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ca:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+stack,140722312269824,135168,NA
+stack:1419,140737228922880,8388608,NA
+stack:1418,140737237315584,8388608,NA
+stack:1417,140737245708288,8388608,NA
+#+end_example
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+library(gmp)
+
+
+system.time(k <- read.csv("Moca-benchmark-dgemm-2016-05-25_15-58-51/Moca-framesoc.csv", header=T));
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+# Use bigz to parse
+k$Address <- as.bigz(paste("0x", k$Address, sep=""))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Duration <- k$End - k$Start
+head(k);
+str(k)
+
+# Add structure info
+structs <- read.csv("Moca-benchmark-dgemm-2016-05-25_15-58-51/structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize", "BackTrace");
+structs$AddressStart <- as.bigz(structs$AddressStart)
+structs$AddressSize <- as.bigz(structs$AddressSize)
+structs$AddressEnd <- structs$AddressStart + structs$AddressSize
+head(structs)
+# Filter interesting data structure as soon as possible
+# The following line is specific to matrix, adapt it for other analysis
+# structs <- structs[grepl("stack",structs$Structure),]
+str(structs)
+show(structs)
+
+# Retrieve struct infos
+nrow(k)
+# These lines are specific to matrix, adapt it for other analysis
+minA <- structs[1,2]
+maxA <- structs[nrow(structs),5];
+proc.time() - ptm
+show(minA)
+show(maxA)
+nrow(k)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+
+Attaching package: ‘gmp’
+
+The following objects are masked from ‘package:base’:
+
+    %*%, apply, crossprod, matrix, tcrossprod
+   user  system elapsed 
+ 24.688   0.432  25.191
+            X.Virt            X.Phy Nreads Nwrites CPUMask   Start     End
+1 0000000000400040 0000620015863278      1       0    1011       1     241
+2 0000000000400270 0000620015863278      1       0    1011     250   15935
+3 000000000040065d 000000000040065d      1       0    1011 6434259 6435196
+4 0000000000405435 000062000b1c6ec8      1       0     111       1     241
+5 000000000041d800 000000000041d800      1       0     111       1     241
+6 0000000000420fa0 0000000000420fa0      1       0     111       1     241
+  TaskId Shared
+1      0      1
+2      0      1
+3      0      1
+4      0      1
+5      0      1
+6      0      1
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+  Address Reads Writes   Start     End Tid N Duration
+1 4194368     1      0       1     241   0 1      240
+2 4194928     1      0     250   15935   0 1    15685
+3 4195933     1      0 6434259 6435196   0 1      937
+4 4215861     1      0       1     241   0 1      240
+5 4315136     1      0       1     241   0 1      240
+6 4329376     1      0       1     241   0 1      240
+'data.frame':	6429314 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:102868556] 82 1a 62 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 250 6434259 1 1 1 1 1 1 1 ...
+ $ End     : int  241 15935 6435196 241 241 241 241 241 241 241 ...
+ $ Tid     : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ N       : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Duration: int  240 15685 937 240 240 240 240 240 240 240 ...
+  Structure    AddressStart AddressSize
+1  calloc#0         6373376        4096
+2  malloc#1         6383184       32816
+3  malloc#2         6419664        4096
+4  malloc#3         6426032        4096
+5  malloc#4         6432400        4096
+6     stack 140722312269824      135168
+                                                                                                                                                                                                  BackTrace
+1                                          moca.so:0x7ffff77dad9d:0x7ffff77daaac/libc.so.6:0x7ffff5ec740c/libquadmath.so.0:0x7ffff5505432/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+2 moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7ffff6659d2d/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+3         moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ae:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+4         moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8bc:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+5         moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ca:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+6                                                                                                                                                                                                      <NA>
+       AddressEnd
+1         6377472
+2         6416000
+3         6423760
+4         6430128
+5         6436496
+6 140722312404992
+'data.frame':	27 obs. of  5 variables:
+ $ Structure   : Factor w/ 26 levels "__GI___pthread_keys",..: 14 15 16 17 18 19 26 25 24 23 ...
+ $ AddressStart:Class 'bigz'  raw [1:416] 1b 00 00 00 ...
+ $ AddressSize :Class 'bigz'  raw [1:328] 1b 00 00 00 ...
+ $ BackTrace   : Factor w/ 5 levels "moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7fff"| __truncated__,..: 5 1 2 3 4 NA NA NA NA NA ...
+ $ AddressEnd  :Class 'bigz'  raw [1:416] 1b 00 00 00 ...
+                           Structure    AddressStart AddressSize
+1                           calloc#0         6373376        4096
+2                           malloc#1         6383184       32816
+3                           malloc#2         6419664        4096
+4                           malloc#3         6426032        4096
+5                           malloc#4         6432400        4096
+6                              stack 140722312269824      135168
+7                         stack:1419 140737228922880     8388608
+8                         stack:1418 140737237315584     8388608
+9                         stack:1417 140737245708288     8388608
+10                        stack:1416 140737254100992     8388608
+11                        stack:1415 140737262493696     8388608
+12                        stack:1414 140737270886400     8388608
+13                        stack:1413 140737279279104    40390656
+14               __GI___pthread_keys 140737333474016       16384
+15                    __pthread_keys 140737333474016       16384
+16 _ZN6Givaro12BlocFreeList7TabSizeE 140737349113024        4096
+17      _ZN6Givaro8Primes167_primesE 140737349118272       52336
+18     _ZN6Givaro8AdicSize8qadic_64E 140737349170624       31752
+19     _ZN6Givaro8AdicSize8n_max_64E 140737349202432       31752
+20     _ZN6Givaro8AdicSize8qadic_53E 140737349234240       11088
+21     _ZN6Givaro8AdicSize8n_max_53E 140737349245376       11088
+22       _ZN6Givaro11IntPrimeDom2IPE 140737351393728       14068
+23      _ZN6Givaro11IntPrimeDom3IP2E 140737351407808       12144
+24 _ZN6Givaro12BlocFreeList7TabFreeE 140737351420288        4096
+25            _ZN6GivaroL9SortedAllE 140737351424640        4096
+26                  _ZN6GivaroL3AllE 140737351428736        8192
+27                             stack 140737488216064      135168
+                                                                                                                                                                                                   BackTrace
+1                                           moca.so:0x7ffff77dad9d:0x7ffff77daaac/libc.so.6:0x7ffff5ec740c/libquadmath.so.0:0x7ffff5505432/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+2  moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5f2c601:0x7ffff5f5dbf6:0x7ffff5f32830/libgomp.so.1:0x7ffff66647b0:0x7ffff6659d2d/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+3          moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ae:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+4          moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8bc:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+5          moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6bcb2e8:0x7ffff6bcb399/libgivaro.so.8:0x7ffff731b8ca:0x7ffff7311c06/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+6                                                                                                                                                                                                       <NA>
+7                                                                                                                                                                                                       <NA>
+8                                                                                                                                                                                                       <NA>
+9                                                                                                                                                                                                       <NA>
+10                                                                                                                                                                                                      <NA>
+11                                                                                                                                                                                                      <NA>
+12                                                                                                                                                                                                      <NA>
+13                                                                                                                                                                                                      <NA>
+14                                                                                                                                                                                                      <NA>
+15                                                                                                                                                                                                      <NA>
+16                                                                                                                                                                                                      <NA>
+17                                                                                                                                                                                                      <NA>
+18                                                                                                                                                                                                      <NA>
+19                                                                                                                                                                                                      <NA>
+20                                                                                                                                                                                                      <NA>
+21                                                                                                                                                                                                      <NA>
+22                                                                                                                                                                                                      <NA>
+23                                                                                                                                                                                                      <NA>
+24                                                                                                                                                                                                      <NA>
+25                                                                                                                                                                                                      <NA>
+26                                                                                                                                                                                                      <NA>
+27                                                                                                                                                                                                      <NA>
+        AddressEnd
+1          6377472
+2          6416000
+3          6423760
+4          6430128
+5          6436496
+6  140722312404992
+7  140737237311488
+8  140737245704192
+9  140737254096896
+10 140737262489600
+11 140737270882304
+12 140737279275008
+13 140737319669760
+14 140737333490400
+15 140737333490400
+16 140737349117120
+17 140737349170608
+18 140737349202376
+19 140737349234184
+20 140737349245328
+21 140737349256464
+22 140737351407796
+23 140737351419952
+24 140737351424384
+25 140737351428736
+26 140737351436928
+27 140737488351232
+[1] 6429314
+   user  system elapsed 
+ 34.168   1.288  37.640
+Big Integer ('bigz') :
+[1] 6373376
+Big Integer ('bigz') :
+[1] 140737488351232
+[1] 6429314
+#+end_example
+
+#+begin_src R :results output :session :exports both
+#system.time(l <- subset(k, k$Address >= minA & k$Address <= maxA));
+system.time(l <- k[which(k$Address >= minA & k$Address <= maxA),]);
+#head(l)
+str(l)
+nrow(l)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+  7.212   0.516   7.750
+'data.frame':	6429293 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:102868304] 6d 1a 62 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  1 1 1 1 1 1 1 1 0 1 ...
+ $ Start   : int  1 1 1 1 1 1 1 1 250 1 ...
+ $ End     : int  241 241 241 241 241 241 241 241 15935 229 ...
+ $ Tid     : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ N       : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Duration: int  240 240 240 240 240 240 240 240 15685 228 ...
+[1] 6429293
+#+end_example
+
+Lot of accesses here, but we have evrything from the mallocs to the
+dynamic librarys, including the stacks. Let see if it is not too much
+for the end:
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+
+# Compute accesses type
+
+m <- l
+system.time(m$aType <- ifelse(m$Write >0,"Write", "Read"));
+system.time(m$sType <- ifelse(m$N > 1,"Shared","Private"));
+system.time(m$Type <- paste(m$sType,m$aType,sep="_"));
+m$sType <- NULL
+m$aType <- NULL
+head(m)
+
+# Compute data structure name and offset
+n <- m
+structs$BackTrace <- NULL
+head(structs)
+getStructReverse <- function (vect){
+  name <- 1
+  start <- 2
+  end <- 4
+  return (ifelse(n$Address >= vect[start] & n$Address <= vect[end],
+                paste(vect[name],as.bigz(n$Address) - as.bigz(vect[start]),sep="@"),""));
+}
+system.time(ans <- as.data.frame(apply(structs,1,getStructReverse)))
+system.time(vect <- apply(ans,1,paste,collapse=""));
+#str(vect)
+system.time(vect <- strsplit(vect,"@"))
+#str(vect)
+system.time(n$Structure <- unlist(lapply(vect,"[",1)))
+system.time(n$Offset <- as.integer(unlist(lapply(vect,"[",2))));
+#str(n)
+head(n)
+nrow(n)
+
+# Aggregate
+system.time(o <- aggregate(n[,c('Reads','Writes', 'N')],n[,c('Structure','Offset', 'Type', 'Start', 'End')], function(d) sum(d)));
+head(o)
+
+proc.time() - ptm
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+  1.376   0.068   1.446
+   user  system elapsed 
+  1.312   0.088   1.400
+   user  system elapsed 
+  1.220   0.012   1.231
+   Address Reads Writes Start End Tid N Duration          Type
+22 6373376     1      1     1 241   0 1      240 Private_Write
+23 6377480     1      1     1 241   0 1      240 Private_Write
+24 6387848     1      1     1 241   0 1      240 Private_Write
+25 6397432     1      1     1 241   0 1      240 Private_Write
+26 6397960     1      1     1 241   0 1      240 Private_Write
+27 6403064     1      1     1 241   0 1      240 Private_Write
+  Structure    AddressStart AddressSize      AddressEnd
+1  calloc#0         6373376        4096         6377472
+2  malloc#1         6383184       32816         6416000
+3  malloc#2         6419664        4096         6423760
+4  malloc#3         6426032        4096         6430128
+5  malloc#4         6432400        4096         6436496
+6     stack 140722312269824      135168 140722312404992
+   user  system elapsed 
+ 298.82   11.16  310.92
+   user  system elapsed 
+ 68.872   0.292  69.382
+   user  system elapsed 
+  1.480   0.000   1.479
+   user  system elapsed 
+  6.664   0.000   6.681
+   user  system elapsed 
+  3.584   0.004   3.622
+   Address Reads Writes Start End Tid N Duration          Type Structure Offset
+22 6373376     1      1     1 241   0 1      240 Private_Write  calloc#0      0
+23 6377480     1      1     1 241   0 1      240 Private_Write      <NA>     NA
+24 6387848     1      1     1 241   0 1      240 Private_Write  malloc#1   4664
+25 6397432     1      1     1 241   0 1      240 Private_Write  malloc#1  14248
+26 6397960     1      1     1 241   0 1      240 Private_Write  malloc#1  14776
+27 6403064     1      1     1 241   0 1      240 Private_Write  malloc#1  19880
+[1] 6429293
+   user  system elapsed 
+  0.516   0.000   0.521
+                      Structure  Offset          Type Start End Reads Writes N
+1 _ZN6Givaro8AdicSize8n_max_64E   20744  Private_Read     1   1     1      0 1
+2                         stack  135114 Private_Write     1   1     1      1 1
+3                      malloc#1   31336 Private_Write     1 229     1      1 1
+4                         stack  134617 Private_Write     1 229     1      1 1
+5                         stack  135114 Private_Write     1 229     1      1 1
+6                    stack:1416 8384312 Private_Write     1 229     1      1 1
+   user  system elapsed 
+ 390.30   11.92  409.08
+#+end_example
+
+It could have been slower, lets take a look:
+
+#+begin_src R :results output graphics :file img/struct_importance_share_dgemm.png :exports both :width 600 :height 400 :session
+library(plyr)
+q <- ddply(o,.(Structure),summarize,Share=sum(N),Nacc=sum(Reads+Writes))
+library(ggplot2);
+p <- ggplot(q,aes(x=Structure,y=Share, fill=Structure)) +
+  geom_bar(stat="identity") +
+  theme_bw() +
+  theme(panel.grid.minor = element_line(colour = "black", linetype="dashed", size = 0.1),
+    panel.grid.major = element_line(colour = "black", size = 0.1)) +
+  scale_y_log10()
+  #lab=("Data structure name") +
+  #ylab=("Number of accesses") +
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/struct_importance_share_dgemm.png]]
+
+
+So here It seems that something happens on one stack (1413 I think)
+and the malloc#1, let see if this is the same thing in terms of number
+of accesses:
+
+#+begin_src R :results output graphics :file img/struct_importance_nacc_dgemm.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q,aes(x=Structure,y=Nacc, fill=Structure)) +
+  geom_bar(stat="identity") +
+  theme_bw() +
+  theme(panel.grid.minor = element_line(colour = "black", linetype="dashed", size = 0.1),
+    panel.grid.major = element_line(colour = "black", size = 0.1)) +
+  scale_y_log10()
+  #lab=("Data structure name") +
+  #ylab=("Number of accesses") +
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/struct_importance_nacc_dgemm.png]]
+
+THe behavior seems quite similar let's keep all the stacks, the
+malloc#& and Givaro 64E.
+
+#+begin_src R :results output :session :exports both
+q <- o[grepl("(stack|64E|#1)",o$Structure),]
+head(q)
+#+end_src
+
+#+RESULTS:
+:                       Structure  Offset          Type Start End Reads Writes N
+: 1 _ZN6Givaro8AdicSize8n_max_64E   20744  Private_Read     1   1     1      0 1
+: 2                         stack  135114 Private_Write     1   1     1      1 1
+: 3                      malloc#1   31336 Private_Write     1 229     1      1 1
+: 4                         stack  134617 Private_Write     1 229     1      1 1
+: 5                         stack  135114 Private_Write     1 229     1      1 1
+: 6                    stack:1416 8384312 Private_Write     1 229     1      1 1
+
+Let see the access pattern:
+
+#+begin_src R :results output graphics :file img/intensity_Rw_dgemm.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=Reads+Writes)) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_Rw_dgemm.png]]
+
+
+Hum still to much structures, let's remove all the smal stacks
+
+#+begin_src R :results output :session :exports both
+r <- q[grepl("(1413|64E|#1)",q$Structure),]
+head(r)
+#+end_src
+
+#+RESULTS:
+:                        Structure  Offset          Type Start End Reads Writes N
+: 1  _ZN6Givaro8AdicSize8n_max_64E   20744  Private_Read     1   1     1      0 1
+: 3                       malloc#1   31336 Private_Write     1 229     1      1 1
+: 7                     stack:1413 8384312 Private_Write     1 230     1      1 1
+: 8                     stack:1413 8387984 Private_Write     1 230     1      1 1
+: 9                       malloc#1   31204   Shared_Read   229 230     1      0 2
+: 10                      malloc#1   31336  Shared_Write   229 230     1      1 2
+
+#+begin_src R :results output graphics :file img/intensity_Rw_dgemm_zoom.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(r) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=Reads+Writes)) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_Rw_dgemm_zoom.png]]
+
+Well this seems very clean, what about the sharing patterns:
+
+#+begin_src R :results output graphics :file img/intensity_share_dgemm.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=as.factor(N))) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_share_dgemm.png]]
+
+
+Same thing: no sharing, and almost everything is on the sack:1413,
+let's zoom:
+
+#+begin_src R :results output graphics :file img/intensity_share_dgemm_zoom.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(r) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=as.factor(N))) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_share_dgemm_zoom.png]]
+
+
+So we don't have the weird read sharing pattern that we had with the
+fgemm.
+
+It is weird that we don't see anything on the other data structures ...
+
+If we look closer at the data frame, it seems that something weird
+happened during the aggregation:
+
+#+begin_src R :results output :session :exports both
+tail(n)
+str(n)
+tail(o)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+                Address Reads Writes   Start     End Tid N Duration
+6429309 140737488349640     1      0     241     241   1 3        0
+6429310 140737488349640     1      0     241     241   5 3        0
+6429311 140737488349640     1      0     241   15871   1 2    15630
+6429312 140737488349640     1      0     241   15871   5 2    15630
+6429313 140737488349640     1      0   15871   15873   1 1        2
+6429314 140737488349208     1      0 6434259 6435196   0 1      937
+                Type Structure Offset
+6429309  Shared_Read     stack 133576
+6429310  Shared_Read     stack 133576
+6429311  Shared_Read     stack 133576
+6429312  Shared_Read     stack 133576
+6429313 Private_Read     stack 133576
+6429314 Private_Read     stack 133144
+'data.frame':	6429293 obs. of  11 variables:
+ $ Address  :Class 'bigz'  raw [1:102868304] 6d 1a 62 00 ...
+ $ Reads    : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes   : int  1 1 1 1 1 1 1 1 0 1 ...
+ $ Start    : int  1 1 1 1 1 1 1 1 250 1 ...
+ $ End      : int  241 241 241 241 241 241 241 241 15935 229 ...
+ $ Tid      : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ N        : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Duration : int  240 240 240 240 240 240 240 240 15685 228 ...
+ $ Type     : chr  "Private_Write" "Private_Write" "Private_Write" "Private_Write" ...
+ $ Structure: chr  "calloc#0" NA "malloc#1" "malloc#1" ...
+ $ Offset   : int  0 NA 4664 14248 14776 19880 23992 28104 29756 31336 ...
+                          Structure   Offset         Type   Start     End Reads
+12981                    stack:1413 28377088 Private_Read 4247041 4249235     1
+12982                    stack:1413 28381184 Private_Read 4247041 4249235     1
+12983                    stack:1413 28382056 Private_Read 4249236 4251635     1
+12984 _ZN6Givaro8AdicSize8n_max_64E    20992 Private_Read 6434259 6435196     1
+12985                         stack   133144 Private_Read 6434259 6435196     1
+12986                    stack:1413  8388616 Private_Read 6434259 6435196     1
+      Writes N
+12981      0 1
+12982      0 1
+12983      0 1
+12984      0 1
+12985      0 1
+12986      0 1
+#+end_example
+
+So we will try to redo the aggregation with ddply:
+
+#+begin_src R :results output :session :exports both
+library(plyr)
+tail(n)
+oo <- ddply(n, .(Structure, Offset, Start, End), summarize, N=sum(N), Reads=sum(Reads), Writes=sum(Writes));
+tail(oo)
+tail(o)
+#+end_src
+
+Killed to slow ...
+
+#+begin_src R :results output :session :exports both
+tail(n)
+#oo <- ddply(n, .(Structure, Offset, Type, Start, End), summarize, N=sum(N), Reads=sum(Reads), Writes=sum(Writes));
+system.time(oo <- aggregate(n[,c('Reads','Writes', 'N')],n[,c('Structure','Offset', 'Start', 'End')], sum));
+tail(oo)
+tail(o)
+head(oo)
+head(o)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+                Address Reads Writes   Start     End Tid N Duration
+6429309 140737488349640     1      0     241     241   1 3        0
+6429310 140737488349640     1      0     241     241   5 3        0
+6429311 140737488349640     1      0     241   15871   1 2    15630
+6429312 140737488349640     1      0     241   15871   5 2    15630
+6429313 140737488349640     1      0   15871   15873   1 1        2
+6429314 140737488349208     1      0 6434259 6435196   0 1      937
+                Type Structure Offset
+6429309  Shared_Read     stack 133576
+6429310  Shared_Read     stack 133576
+6429311  Shared_Read     stack 133576
+6429312  Shared_Read     stack 133576
+6429313 Private_Read     stack 133576
+6429314 Private_Read     stack 133144
+   user  system elapsed 
+  0.480   0.000   0.481
+                          Structure   Offset   Start     End Reads Writes N
+12981                    stack:1413 28377088 4247041 4249235     1      0 1
+12982                    stack:1413 28381184 4247041 4249235     1      0 1
+12983                    stack:1413 28382056 4249236 4251635     1      0 1
+12984 _ZN6Givaro8AdicSize8n_max_64E    20992 6434259 6435196     1      0 1
+12985                         stack   133144 6434259 6435196     1      0 1
+12986                    stack:1413  8388616 6434259 6435196     1      0 1
+                          Structure   Offset         Type   Start     End Reads
+12981                    stack:1413 28377088 Private_Read 4247041 4249235     1
+12982                    stack:1413 28381184 Private_Read 4247041 4249235     1
+12983                    stack:1413 28382056 Private_Read 4249236 4251635     1
+12984 _ZN6Givaro8AdicSize8n_max_64E    20992 Private_Read 6434259 6435196     1
+12985                         stack   133144 Private_Read 6434259 6435196     1
+12986                    stack:1413  8388616 Private_Read 6434259 6435196     1
+      Writes N
+12981      0 1
+12982      0 1
+12983      0 1
+12984      0 1
+12985      0 1
+12986      0 1
+                      Structure  Offset Start End Reads Writes N
+1 _ZN6Givaro8AdicSize8n_max_64E   20744     1   1     1      0 1
+2                         stack  135114     1   1     1      1 1
+3                      malloc#1   31336     1 229     1      1 1
+4                         stack  134617     1 229     1      1 1
+5                         stack  135114     1 229     1      1 1
+6                    stack:1416 8384312     1 229     1      1 1
+                      Structure  Offset          Type Start End Reads Writes N
+1 _ZN6Givaro8AdicSize8n_max_64E   20744  Private_Read     1   1     1      0 1
+2                         stack  135114 Private_Write     1   1     1      1 1
+3                      malloc#1   31336 Private_Write     1 229     1      1 1
+4                         stack  134617 Private_Write     1 229     1      1 1
+5                         stack  135114 Private_Write     1 229     1      1 1
+6                    stack:1416 8384312 Private_Write     1 229     1      1 1
+#+end_example
+
+
+After several tests, on mtcars data set, I think the aggregate call is
+fine, just to be completly convinced, let check if the accesses in the
+end of o are actually in the data frame n:
+
+#+begin_src R :results output :session :exports both
+head(n[which(n$Start == 4247041),]);
+#+end_src
+
+#+RESULTS:
+#+begin_example
+                Address Reads Writes   Start     End Tid N Duration
+12865   140737184898704     1      0 4247041 4249235   0 1     2194
+12869   140737184903168     1      0 4247041 4249235   0 1     2194
+12871   140737184907264     1      0 4247041 4249235   0 1     2194
+12874   140737184911360     1      0 4247041 4249235   0 1     2194
+1256438 140737199734784     1      0 4247041 4249235   0 1     2194
+1258395 140737199738880     1      0 4247041 4249235   0 1     2194
+                Type Structure Offset
+12865   Private_Read      <NA>     NA
+12869   Private_Read      <NA>     NA
+12871   Private_Read      <NA>     NA
+12874   Private_Read      <NA>     NA
+1256438 Private_Read      <NA>     NA
+1258395 Private_Read      <NA>     NA
+#+end_example
+
+
+Ok fair enough.
+
+So I think we can consider that the aggregation phase works, know we
+should try to understand why we can't see any accesses on the global
+view, my guess is that most accesses are concentrated on a very small
+laps of time.
+
+
