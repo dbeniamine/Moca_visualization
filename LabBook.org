@@ -9285,14 +9285,8 @@ nrow(k)
 
 #+RESULTS:
 #+begin_example
-
-Attaching package: ‘gmp’
-
-The following objects are masked from ‘package:base’:
-
-    %*%, apply, crossprod, matrix, tcrossprod
    user  system elapsed 
- 24.688   0.432  25.191
+  26.98    0.64   27.65
             X.Virt            X.Phy Nreads Nwrites CPUMask   Start     End
 1 0000000000400040 0000620015863278      1       0    1011       1     241
 2 0000000000400270 0000620015863278      1       0    1011     250   15935
@@ -9440,7 +9434,7 @@ The following objects are masked from ‘package:base’:
 27 140737488351232
 [1] 6429314
    user  system elapsed 
- 34.168   1.288  37.640
+ 38.192   1.228  41.701
 Big Integer ('bigz') :
 [1] 6373376
 Big Integer ('bigz') :
@@ -9459,7 +9453,7 @@ nrow(l)
 #+RESULTS:
 #+begin_example
    user  system elapsed 
-  7.212   0.516   7.750
+  7.008   0.640   7.650
 'data.frame':	6429293 obs. of  8 variables:
  $ Address :Class 'bigz'  raw [1:102868304] 6d 1a 62 00 ...
  $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
@@ -9506,7 +9500,7 @@ system.time(vect <- apply(ans,1,paste,collapse=""));
 system.time(vect <- strsplit(vect,"@"))
 #str(vect)
 system.time(n$Structure <- unlist(lapply(vect,"[",1)))
-system.time(n$Offset <- as.integer(unlist(lapply(vect,"[",2))));
+system.time(n$Offset <- as.integer(unlist(lapply(vect,"[",2)))/4096);
 #str(n)
 head(n)
 nrow(n)
@@ -9521,11 +9515,11 @@ proc.time() - ptm
 #+RESULTS:
 #+begin_example
    user  system elapsed 
-  1.376   0.068   1.446
+  1.512   0.300   2.488
    user  system elapsed 
-  1.312   0.088   1.400
+  1.396   0.032   1.503
    user  system elapsed 
-  1.220   0.012   1.231
+  1.212   0.000   1.215
    Address Reads Writes Start End Tid N Duration          Type
 22 6373376     1      1     1 241   0 1      240 Private_Write
 23 6377480     1      1     1 241   0 1      240 Private_Write
@@ -9541,34 +9535,34 @@ proc.time() - ptm
 5  malloc#4         6432400        4096         6436496
 6     stack 140722312269824      135168 140722312404992
    user  system elapsed 
- 298.82   11.16  310.92
+315.464   6.604 342.358
    user  system elapsed 
- 68.872   0.292  69.382
+ 60.380   2.656  73.027
    user  system elapsed 
-  1.480   0.000   1.479
+  0.576   0.000   0.577
    user  system elapsed 
-  6.664   0.000   6.681
+  5.584   0.000   5.591
    user  system elapsed 
-  3.584   0.004   3.622
+  3.976   0.008   4.003
    Address Reads Writes Start End Tid N Duration          Type Structure Offset
-22 6373376     1      1     1 241   0 1      240 Private_Write  calloc#0      0
+22 6373376     1      1     1 241   0 1      240 Private_Write  calloc#0  0.000
 23 6377480     1      1     1 241   0 1      240 Private_Write      <NA>     NA
-24 6387848     1      1     1 241   0 1      240 Private_Write  malloc#1   4664
-25 6397432     1      1     1 241   0 1      240 Private_Write  malloc#1  14248
-26 6397960     1      1     1 241   0 1      240 Private_Write  malloc#1  14776
-27 6403064     1      1     1 241   0 1      240 Private_Write  malloc#1  19880
+24 6387848     1      1     1 241   0 1      240 Private_Write  malloc#1  1.139
+25 6397432     1      1     1 241   0 1      240 Private_Write  malloc#1  3.479
+26 6397960     1      1     1 241   0 1      240 Private_Write  malloc#1  3.607
+27 6403064     1      1     1 241   0 1      240 Private_Write  malloc#1  4.854
 [1] 6429293
    user  system elapsed 
-  0.516   0.000   0.521
-                      Structure  Offset          Type Start End Reads Writes N
-1 _ZN6Givaro8AdicSize8n_max_64E   20744  Private_Read     1   1     1      0 1
-2                         stack  135114 Private_Write     1   1     1      1 1
-3                      malloc#1   31336 Private_Write     1 229     1      1 1
-4                         stack  134617 Private_Write     1 229     1      1 1
-5                         stack  135114 Private_Write     1 229     1      1 1
-6                    stack:1416 8384312 Private_Write     1 229     1      1 1
+  0.620   0.036   0.833
+                      Structure   Offset          Type Start End Reads Writes N
+1 _ZN6Givaro8AdicSize8n_max_64E    5.064  Private_Read     1   1     1      0 1
+2                         stack   32.987 Private_Write     1   1     1      1 1
+3                      malloc#1    7.650 Private_Write     1 229     1      1 1
+4                         stack   32.865 Private_Write     1 229     1      1 1
+5                         stack   32.987 Private_Write     1 229     1      1 1
+6                    stack:1416 2046.951 Private_Write     1 229     1      1 1
    user  system elapsed 
- 390.30   11.92  409.08
+ 401.95   10.22  450.68
 #+end_example
 
 It could have been slower, lets take a look:
@@ -9621,13 +9615,13 @@ head(q)
 #+end_src
 
 #+RESULTS:
-:                       Structure  Offset          Type Start End Reads Writes N
-: 1 _ZN6Givaro8AdicSize8n_max_64E   20744  Private_Read     1   1     1      0 1
-: 2                         stack  135114 Private_Write     1   1     1      1 1
-: 3                      malloc#1   31336 Private_Write     1 229     1      1 1
-: 4                         stack  134617 Private_Write     1 229     1      1 1
-: 5                         stack  135114 Private_Write     1 229     1      1 1
-: 6                    stack:1416 8384312 Private_Write     1 229     1      1 1
+:                       Structure   Offset          Type Start End Reads Writes N
+: 1 _ZN6Givaro8AdicSize8n_max_64E    5.064  Private_Read     1   1     1      0 1
+: 2                         stack   32.987 Private_Write     1   1     1      1 1
+: 3                      malloc#1    7.650 Private_Write     1 229     1      1 1
+: 4                         stack   32.865 Private_Write     1 229     1      1 1
+: 5                         stack   32.987 Private_Write     1 229     1      1 1
+: 6                    stack:1416 2046.951 Private_Write     1 229     1      1 1
 
 Let see the access pattern:
 
@@ -9655,13 +9649,22 @@ head(r)
 #+end_src
 
 #+RESULTS:
-:                        Structure  Offset          Type Start End Reads Writes N
-: 1  _ZN6Givaro8AdicSize8n_max_64E   20744  Private_Read     1   1     1      0 1
-: 3                       malloc#1   31336 Private_Write     1 229     1      1 1
-: 7                     stack:1413 8384312 Private_Write     1 230     1      1 1
-: 8                     stack:1413 8387984 Private_Write     1 230     1      1 1
-: 9                       malloc#1   31204   Shared_Read   229 230     1      0 2
-: 10                      malloc#1   31336  Shared_Write   229 230     1      1 2
+#+begin_example
+                       Structure   Offset          Type Start End Reads Writes
+1  _ZN6Givaro8AdicSize8n_max_64E    5.064  Private_Read     1   1     1      0
+3                       malloc#1    7.650 Private_Write     1 229     1      1
+7                     stack:1413 2046.951 Private_Write     1 230     1      1
+8                     stack:1413 2047.848 Private_Write     1 230     1      1
+9                       malloc#1    7.618   Shared_Read   229 230     1      0
+10                      malloc#1    7.650  Shared_Write   229 230     1      1
+   N
+1  1
+3  1
+7  1
+8  1
+9  2
+10 2
+#+end_example
 
 #+begin_src R :results output graphics :file img/intensity_Rw_dgemm_zoom.png :exports both :width 600 :height 400 :session
 library(ggplot2);
@@ -9739,12 +9742,12 @@ tail(o)
 6429313 140737488349640     1      0   15871   15873   1 1        2
 6429314 140737488349208     1      0 6434259 6435196   0 1      937
                 Type Structure Offset
-6429309  Shared_Read     stack 133576
-6429310  Shared_Read     stack 133576
-6429311  Shared_Read     stack 133576
-6429312  Shared_Read     stack 133576
-6429313 Private_Read     stack 133576
-6429314 Private_Read     stack 133144
+6429309  Shared_Read     stack  32.61
+6429310  Shared_Read     stack  32.61
+6429311  Shared_Read     stack  32.61
+6429312  Shared_Read     stack  32.61
+6429313 Private_Read     stack  32.61
+6429314 Private_Read     stack  32.51
 'data.frame':	6429293 obs. of  11 variables:
  $ Address  :Class 'bigz'  raw [1:102868304] 6d 1a 62 00 ...
  $ Reads    : int  1 1 1 1 1 1 1 1 1 1 ...
@@ -9756,14 +9759,14 @@ tail(o)
  $ Duration : int  240 240 240 240 240 240 240 240 15685 228 ...
  $ Type     : chr  "Private_Write" "Private_Write" "Private_Write" "Private_Write" ...
  $ Structure: chr  "calloc#0" NA "malloc#1" "malloc#1" ...
- $ Offset   : int  0 NA 4664 14248 14776 19880 23992 28104 29756 31336 ...
+ $ Offset   : num  0 NA 1.14 3.48 3.61 ...
                           Structure   Offset         Type   Start     End Reads
-12981                    stack:1413 28377088 Private_Read 4247041 4249235     1
-12982                    stack:1413 28381184 Private_Read 4247041 4249235     1
-12983                    stack:1413 28382056 Private_Read 4249236 4251635     1
-12984 _ZN6Givaro8AdicSize8n_max_64E    20992 Private_Read 6434259 6435196     1
-12985                         stack   133144 Private_Read 6434259 6435196     1
-12986                    stack:1413  8388616 Private_Read 6434259 6435196     1
+12981                    stack:1413 6928.000 Private_Read 4247041 4249235     1
+12982                    stack:1413 6929.000 Private_Read 4247041 4249235     1
+12983                    stack:1413 6929.213 Private_Read 4249236 4251635     1
+12984 _ZN6Givaro8AdicSize8n_max_64E    5.125 Private_Read 6434259 6435196     1
+12985                         stack   32.506 Private_Read 6434259 6435196     1
+12986                    stack:1413 2048.002 Private_Read 6434259 6435196     1
       Writes N
 12981      0 1
 12982      0 1
@@ -9805,28 +9808,28 @@ head(o)
 6429313 140737488349640     1      0   15871   15873   1 1        2
 6429314 140737488349208     1      0 6434259 6435196   0 1      937
                 Type Structure Offset
-6429309  Shared_Read     stack 133576
-6429310  Shared_Read     stack 133576
-6429311  Shared_Read     stack 133576
-6429312  Shared_Read     stack 133576
-6429313 Private_Read     stack 133576
-6429314 Private_Read     stack 133144
+6429309  Shared_Read     stack  32.61
+6429310  Shared_Read     stack  32.61
+6429311  Shared_Read     stack  32.61
+6429312  Shared_Read     stack  32.61
+6429313 Private_Read     stack  32.61
+6429314 Private_Read     stack  32.51
    user  system elapsed 
-  0.480   0.000   0.481
+  0.572   0.008   0.601
                           Structure   Offset   Start     End Reads Writes N
-12981                    stack:1413 28377088 4247041 4249235     1      0 1
-12982                    stack:1413 28381184 4247041 4249235     1      0 1
-12983                    stack:1413 28382056 4249236 4251635     1      0 1
-12984 _ZN6Givaro8AdicSize8n_max_64E    20992 6434259 6435196     1      0 1
-12985                         stack   133144 6434259 6435196     1      0 1
-12986                    stack:1413  8388616 6434259 6435196     1      0 1
+12981                    stack:1413 6928.000 4247041 4249235     1      0 1
+12982                    stack:1413 6929.000 4247041 4249235     1      0 1
+12983                    stack:1413 6929.213 4249236 4251635     1      0 1
+12984 _ZN6Givaro8AdicSize8n_max_64E    5.125 6434259 6435196     1      0 1
+12985                         stack   32.506 6434259 6435196     1      0 1
+12986                    stack:1413 2048.002 6434259 6435196     1      0 1
                           Structure   Offset         Type   Start     End Reads
-12981                    stack:1413 28377088 Private_Read 4247041 4249235     1
-12982                    stack:1413 28381184 Private_Read 4247041 4249235     1
-12983                    stack:1413 28382056 Private_Read 4249236 4251635     1
-12984 _ZN6Givaro8AdicSize8n_max_64E    20992 Private_Read 6434259 6435196     1
-12985                         stack   133144 Private_Read 6434259 6435196     1
-12986                    stack:1413  8388616 Private_Read 6434259 6435196     1
+12981                    stack:1413 6928.000 Private_Read 4247041 4249235     1
+12982                    stack:1413 6929.000 Private_Read 4247041 4249235     1
+12983                    stack:1413 6929.213 Private_Read 4249236 4251635     1
+12984 _ZN6Givaro8AdicSize8n_max_64E    5.125 Private_Read 6434259 6435196     1
+12985                         stack   32.506 Private_Read 6434259 6435196     1
+12986                    stack:1413 2048.002 Private_Read 6434259 6435196     1
       Writes N
 12981      0 1
 12982      0 1
@@ -9834,20 +9837,20 @@ head(o)
 12984      0 1
 12985      0 1
 12986      0 1
-                      Structure  Offset Start End Reads Writes N
-1 _ZN6Givaro8AdicSize8n_max_64E   20744     1   1     1      0 1
-2                         stack  135114     1   1     1      1 1
-3                      malloc#1   31336     1 229     1      1 1
-4                         stack  134617     1 229     1      1 1
-5                         stack  135114     1 229     1      1 1
-6                    stack:1416 8384312     1 229     1      1 1
-                      Structure  Offset          Type Start End Reads Writes N
-1 _ZN6Givaro8AdicSize8n_max_64E   20744  Private_Read     1   1     1      0 1
-2                         stack  135114 Private_Write     1   1     1      1 1
-3                      malloc#1   31336 Private_Write     1 229     1      1 1
-4                         stack  134617 Private_Write     1 229     1      1 1
-5                         stack  135114 Private_Write     1 229     1      1 1
-6                    stack:1416 8384312 Private_Write     1 229     1      1 1
+                      Structure   Offset Start End Reads Writes N
+1 _ZN6Givaro8AdicSize8n_max_64E    5.064     1   1     1      0 1
+2                         stack   32.987     1   1     1      1 1
+3                      malloc#1    7.650     1 229     1      1 1
+4                         stack   32.865     1 229     1      1 1
+5                         stack   32.987     1 229     1      1 1
+6                    stack:1416 2046.951     1 229     1      1 1
+                      Structure   Offset          Type Start End Reads Writes N
+1 _ZN6Givaro8AdicSize8n_max_64E    5.064  Private_Read     1   1     1      0 1
+2                         stack   32.987 Private_Write     1   1     1      1 1
+3                      malloc#1    7.650 Private_Write     1 229     1      1 1
+4                         stack   32.865 Private_Write     1 229     1      1 1
+5                         stack   32.987 Private_Write     1 229     1      1 1
+6                    stack:1416 2046.951 Private_Write     1 229     1      1 1
 #+end_example
 
 
@@ -9885,4 +9888,25 @@ should try to understand why we can't see any accesses on the global
 view, my guess is that most accesses are concentrated on a very small
 laps of time.
 
+So let's try to zoom on a data structure that seems not to be
+accessed, for instance malloc#1:
 
+#+begin_src R :results output graphics :file img/intensity_Rw_dgemm_zoom2.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(r[grepl("#1",r$Structure),]) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=Reads+Writes)) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_Rw_dgemm_zoom2.png]]
+
+
+This time we can see something, it is important to note that the
+timestamp only goes to 15000, which explains what we can't see the
+accesses in the other views.
