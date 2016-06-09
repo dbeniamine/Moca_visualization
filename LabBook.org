@@ -10697,6 +10697,9 @@ p
 [[file:img/intensity_share_lulesh.png]]
 * 2016-06-09 Second try on lulesh Mpi                                 :David:
 
+Download the trace here:
+https://ligcloud.imag.fr/public.php?service=files&t=e25b0c92c6af5a83f5e55ff4a1b5d124
+
 I tried another approach to merge data structures on lulesh OMPi: I
 merge two mallocs if they are consecutive and they comes from the same
 code instruction. Furthermore, I remove every mallocs that comes from
