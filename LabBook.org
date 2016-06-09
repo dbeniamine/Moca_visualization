@@ -9910,7 +9910,7 @@ p
 This time we can see something, it is important to note that the
 timestamp only goes to 15000, which explains what we can't see the
 accesses in the other views.
-* 2016-06-03 First look at Lulesh                                     :David:
+* 2016-06-03 First look at Lulesh (the trace is here)                 :David:
 
 I wasn't able to build lulesh OMP4 from this link
 https://codesign.llnl.gov/lulesh/lulesh2_OMP4.tgz
