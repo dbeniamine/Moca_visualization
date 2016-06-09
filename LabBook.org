@@ -10813,7 +10813,7 @@ nrow(k)
 #+RESULTS:
 #+begin_example
    user  system elapsed 
- 26.496   0.408  26.970
+ 25.000   0.308  25.318
             X.Virt            X.Phy Nreads Nwrites CPUMask Start  End TaskId
 1 0000000000400040 000062000288c510      1       0     110     1  409      0
 2 00000000004002b8 0000620014ef6f88      1       0  100000   410  410      1
@@ -10898,7 +10898,7 @@ nrow(k)
 6 140737488351232
 [1] 6722563
    user  system elapsed 
- 36.696   0.888  39.997
+  35.02    0.96   38.25
 Big Integer ('bigz') :
 [1] 140737154670592
 Big Integer ('bigz') :
@@ -10918,7 +10918,7 @@ nrow(l)
 #+RESULTS:
 #+begin_example
    user  system elapsed 
-  5.772   0.328   6.101
+  5.536   0.360   5.897
 'data.frame':	1078531 obs. of  8 variables:
  $ Address :Class 'bigz'  raw [1:17256500] 03 75 10 00 ...
  $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
@@ -10976,11 +10976,11 @@ proc.time() - ptm
 #+RESULTS:
 #+begin_example
    user  system elapsed 
-  0.248   0.000   0.251
+  0.264   0.000   0.263
    user  system elapsed 
-  0.232   0.000   0.232
+  0.240   0.000   0.238
    user  system elapsed 
-  0.208   0.000   0.210
+  0.180   0.000   0.181
                 Address Reads Writes Start   End Tid N Duration          Type
 5644033 140737163054904     1      1  2290  4573   0 1     2283 Private_Write
 5644034 140737163054904     1      1  4573  4586   0 2       13  Shared_Write
@@ -10996,15 +10996,15 @@ proc.time() - ptm
 5 __GI___pthread_keys 140737332867808       32768 140737332900576
 6               stack 140737488216064      135168 140737488351232
    user  system elapsed 
-  13.24    0.18   13.43
+  12.62    0.10   12.72
    user  system elapsed 
-  5.992   0.000   5.996
+  5.840   0.008   5.850
    user  system elapsed 
-  1.372   0.000   1.373
+  1.360   0.000   1.363
    user  system elapsed 
-  0.968   0.000   0.969
+  0.912   0.000   0.909
    user  system elapsed 
-  0.620   0.000   0.621 
+  0.568   0.000   0.568 
 Warning message:
 In system.time(n$Offset <- as.integer(unlist(lapply(vect, "[", 2)))/4096) :
   NAs introduced by coercion
@@ -11024,7 +11024,7 @@ In system.time(n$Offset <- as.integer(unlist(lapply(vect, "[", 2)))/4096) :
 5644038 stack:1517   2048
 [1] 1078531
    user  system elapsed 
- 40.500   0.012  40.617
+  39.57    0.00   39.58
   Structure Offset          Type Start End Reads Writes N
 1     stack  32.89 Private_Write     1   1     1      1 1
 2     stack  32.99 Private_Write     1   1     1      1 1
@@ -11033,7 +11033,7 @@ In system.time(n$Offset <- as.integer(unlist(lapply(vect, "[", 2)))/4096) :
 5     stack  32.00 Private_Write     1 409     1      1 1
 6     stack  32.29 Private_Write     1 409     1      1 1
    user  system elapsed 
- 64.904   0.192  68.474
+ 63.052   0.108  66.383
 #+end_example
 
 
@@ -11158,3 +11158,27 @@ trace of lulesh-OMP4.
 
 @Lucas: you have already looked at lulesh, what do you think of theses
 traces ? Should we play on lulesh parameters ?
+
+
+Discussion avec Lucas:
+
+#+begin_src R :results output graphics :file img/intensity_Rw_luleshOMPI_zoom_Pread.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q[q$Type=="Private_Read" | q$Type =="Shared_Read",]) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=as.factor(Reads+Writes))) +
+  theme_bw() +
+  facet_wrap(~Type, ncol=1) +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank()) +
+  xlim(0,100000);
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_Rw_luleshOMPI_zoom_Pread.png]]
+
+
+
+BUG: acces a la  fois shared et private, il faudrais vérifier le code
+de framesoc-parser.pl dans Moca/src/utils.
