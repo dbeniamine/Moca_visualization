@@ -9910,3 +9910,1251 @@ p
 This time we can see something, it is important to note that the
 timestamp only goes to 15000, which explains what we can't see the
 accesses in the other views.
+* 2016-06-03 First look at Lulesh                                     :David:
+
+I wasn't able to build lulesh OMP4 from this link
+https://codesign.llnl.gov/lulesh/lulesh2_OMP4.tgz
+so I used the MPI+OMP version 
+https://codesign.llnl.gov/lulesh/lulesh2.0.3.tgz
+As I was workng only on one machine it should be line a normal openMP
+run, I guess.
+
+The trace is here:
+https://ligcloud.imag.fr/public.php?service=files&t=e25b0c92c6af5a83f5e55ff4a1b5d124
+#+begin_src sh :results output :exports both :session
+md5sum lulesh-OMPi.tgz
+#+end_src
+
+#+RESULTS:
+: a52e52f38c9f32b6a72a82f2c5c9e3f3  lulesh-OMPi.tgz
+
+
+#+begin_src sh :results output :exports both :session
+cd Moca-lulesh2.0-2016-06-03_11-22-13
+# Already done on grid5000 (requires a huge amount of memory)
+#~/Work/Moca/src/utils/create_event_producer.sh 4096 Moca-full-trace.csv
+#~/Work/Moca/src/utils/retrieve_stacks.sh stacks.log structs.csv
+head Moca-framesoc.csv
+sort -n -t',' -k2,2 structs.csv | \
+awk -F , 'BEGIN{p="";cpt=1} {if(p==$1){n=$1"-"cpt;cpt++}\
+else{cpt=1;n=$1};p=$1;print n","$2","$3","$4}'  > structs-uniq.csv
+head  structs-uniq.csv
+wc -l structs-uniq.csv
+grep -i malloc structs-uniq.csv | wc -l
+#+end_src
+
+#+RESULTS:
+#+begin_example
+@Virt,@Phy,Nreads,Nwrites,CPUMask,Start,End,TaskId,Shared
+0000000000400040,000062000288c510,1,0,000000110,1,409,0,1
+00000000004002b8,0000620014ef6f88,1,0,000100000,410,410,1,1
+00000000004002b8,0000620014ef6f88,1,0,000100000,410,947,1,1
+0000000000400040,0000620014ef6f88,1,0,000000100,410,947,1,1
+0000000000400040,0000620014ef6f88,1,0,000000100,947,947,1,1
+0000000000400280,000062000288c510,1,0,000000110,1262,1495,0,1
+00000000004002e0,000062000288c510,1,0,000000110,1496,1968,0,1
+0000000000405435,000062000a932b38,1,0,000100110,1,409,0,1
+00000000004147e0,00006200028c5968,1,0,000010110,2290,4586,0,1
+name,addr,size,backtrace
+malloc#0,6300496,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff6279601/libnuma.so.1:0x7ffff5ba3731/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#1,6338752,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff6279601:0x7ffff62aabf6:0x7ffff627f830/libnuma.so.1:0x7ffff5ba380b/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#2,6386400,4096,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff7584432:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#3,6396256,16386,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff758e275:0x7ffff758f92e:0x7ffff758fa62:0x7ffff75842cc:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#4,6416432,65544,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff758f323:0x7ffff758fa72:0x7ffff75842cc:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#0,6480720,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5e98601/libnuma.so.1:0x7ffff5199731/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#5,6505920,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff6279601/libltdl.so.7:0x7ffff678fd16:0x7ffff678f831:0x7ffff6790389/libopen-rte.so.4:0x7ffff75814d9:0x7ffff7582067:0x7ffff7599181:0x7ffff756bac8:0x7ffff7525897:0x7ffff754062corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#1,6517312,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5e98601:0x7ffff5ec9bf6:0x7ffff5e9e830/libnuma.so.1:0x7ffff519980b/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#2,6553552,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5e98601:0x7ffff5ec9bf6:0x7ffff5e9e830/libgomp.so.1:0x7ffff65d07b0:0x7ffff65c5d2d/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+150317 structs-uniq.csv
+150306
+#+end_example
+
+This is a lot of malloc's !
+If we look at them we can see that:
+- They all comes from the same line of code (we should look at it
+  later)
+- They come by set of mallocs of the same size
+
+Thus I think we can merge each set of continous mallocs of the same
+size (they are probably part of the same data structure).
+
+After an attempt, it appears that there are some holes between the
+mallocs probably due to the buddy algorithm yet as data structures are
+sorted by addresses we can ignore these holes and merge the data structures.
+
+#+begin_src sh :results output :exports both :session
+cd Moca-lulesh2.0-2016-06-03_11-22-13
+./merge_mallocs.sh structs-uniq.csv structs-merged.csv
+head  structs-merged.csv
+wc -l structs-merged.csv
+grep -i malloc structs-merged.csv | wc -l
+#+end_src
+
+#+RESULTS:
+#+begin_example
+name,addr,size,backtrace
+malloc#0,6300496,65632,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff6279601/libnuma.so.1:0x7ffff5ba3731/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#2,6386400,4096,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff7584432:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#3,6396256,16386,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff758e275:0x7ffff758f92e:0x7ffff758fa62:0x7ffff75842cc:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#4,6416432,65544,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff758f323:0x7ffff758fa72:0x7ffff75842cc:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#0,6480720,131264,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5e98601/libnuma.so.1:0x7ffff5199731/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#6,6560528,8336,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff7581118:0x7ffff7582067:0x7ffff75a1483:0x7ffff756bb13:0x7ffff7525897:0x7ffff754062corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#3,6594672,4096,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libmpi.so.1:0x7ffff7333a32:0x7ffff7333b87:0x7ffff7333f0d:0x7ffff7333490:0x7ffff73382aa:0x7ffff7343ecd:0x7ffff728c0dc:0x7ffff72a496a/lulesh2.0:0x408b24/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+malloc#8,6597264,8336,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff7581118:0x7ffff7582067:0x7ffff7597443:0x7ffff756bbc7:0x7ffff7525897:0x7ffff754062corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#4,6604768,16386,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libmpi.so.1:0x7ffff73247d5:0x7ffff7325e8e:0x7ffff7325fc2:0x7ffff73338cc:0x7ffff7333b87:0x7ffff7333f0d:0x7ffff7333490:0x7ffff73382aa:0x7ffff7343ecd:0x7ffff728c0dc:0x7ffff72a496a/lulesh2.0:0x408b24/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+9413 structs-merged.csv
+9408
+#+end_example
+
+It's still way more than what we can visually analyze but maybe this
+time it won't be to heavy for the parsing:
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+library(gmp)
+
+
+system.time(k <- read.csv("Moca-lulesh2.0-2016-06-03_11-22-13/Moca-framesoc.csv", header=T));
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+# Use bigz to parse
+k$Address <- as.bigz(paste("0x", k$Address, sep=""))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Duration <- k$End - k$Start
+head(k);
+str(k)
+
+# Add structure info
+structs <- read.csv("Moca-lulesh2.0-2016-06-03_11-22-13/structs-merged.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize", "BackTrace");
+structs$AddressStart <- as.bigz(structs$AddressStart)
+structs$AddressSize <- as.bigz(structs$AddressSize)
+structs$AddressEnd <- structs$AddressStart + structs$AddressSize
+head(structs)
+# Filter interesting data structure as soon as possible
+# The following line is specific to matrix, adapt it for other analysis
+# structs <- structs[grepl("stack",structs$Structure),]
+str(structs)
+head(structs)
+
+# Retrieve struct infos
+nrow(k)
+# These lines are specific to matrix, adapt it for other analysis
+minA <- structs[1,2]
+maxA <- structs[nrow(structs),5];
+proc.time() - ptm
+show(minA)
+show(maxA)
+nrow(k)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+
+Attaching package: ‘gmp’
+
+The following objects are masked from ‘package:base’:
+
+    %*%, apply, crossprod, matrix, tcrossprod
+   user  system elapsed 
+ 27.152   0.540  27.727
+            X.Virt            X.Phy Nreads Nwrites CPUMask Start  End TaskId
+1 0000000000400040 000062000288c510      1       0     110     1  409      0
+2 00000000004002b8 0000620014ef6f88      1       0  100000   410  410      1
+3 00000000004002b8 0000620014ef6f88      1       0  100000   410  947      1
+4 0000000000400040 0000620014ef6f88      1       0     100   410  947      1
+5 0000000000400040 0000620014ef6f88      1       0     100   947  947      1
+6 0000000000400280 000062000288c510      1       0     110  1262 1495      0
+  Shared
+1      1
+2      1
+3      1
+4      1
+5      1
+6      1
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+  Address Reads Writes Start  End Tid N Duration
+1 4194368     1      0     1  409   0 1      408
+2 4195000     1      0   410  410   1 1        0
+3 4195000     1      0   410  947   1 1      537
+4 4194368     1      0   410  947   1 1      537
+5 4194368     1      0   947  947   1 1        0
+6 4194944     1      0  1262 1495   0 1      233
+'data.frame':	6722563 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:95442412] 03 94 66 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 410 410 410 947 1262 1496 1 2290 1 ...
+ $ End     : int  409 410 947 947 947 1495 1968 409 4586 409 ...
+ $ Tid     : int  0 1 1 1 1 0 0 0 0 0 ...
+ $ N       : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Duration: int  408 0 537 537 0 233 472 408 2296 408 ...
+  Structure AddressStart AddressSize
+1  malloc#0      6300496       65632
+2  malloc#2      6386400        4096
+3  malloc#3      6396256       16386
+4  malloc#4      6416432       65544
+5  malloc#0      6480720      131264
+6  malloc#6      6560528        8336
+                                                                                                                                                                                                                                                          BackTrace
+1                                                                                                      moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff6279601/libnuma.so.1:0x7ffff5ba3731/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+2                                              moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff7584432:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+3 moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff758e275:0x7ffff758f92e:0x7ffff758fa62:0x7ffff75842cc:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+4                moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff758f323:0x7ffff758fa72:0x7ffff75842cc:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+5                                                                                                      moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5e98601/libnuma.so.1:0x7ffff5199731/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+6                                                             moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff7581118:0x7ffff7582067:0x7ffff75a1483:0x7ffff756bb13:0x7ffff7525897:0x7ffff754062corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+  AddressEnd
+1    6366128
+2    6390496
+3    6412642
+4    6481976
+5    6611984
+6    6568864
+'data.frame':	9412 obs. of  5 variables:
+ $ Structure   : Factor w/ 9400 levels "__GI___pthread_keys",..: 2 3838 4532 5229 2 6619 4532 8002 5229 8700 ...
+ $ AddressStart:Class 'bigz'  raw [1:128420] c4 24 00 00 ...
+ $ AddressSize :Class 'bigz'  raw [1:112948] c4 24 00 00 ...
+ $ BackTrace   : Factor w/ 82 levels "moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5e98601/libhwloc.so.5:0x7ffff6e0ac98:0x7ffff6e0b079:0x7ffff6e0b1c7:0x7ff"| __truncated__,..: 7 54 55 56 4 52 24 50 15 50 ...
+ $ AddressEnd  :Class 'bigz'  raw [1:128424] c4 24 00 00 ...
+  Structure AddressStart AddressSize
+1  malloc#0      6300496       65632
+2  malloc#2      6386400        4096
+3  malloc#3      6396256       16386
+4  malloc#4      6416432       65544
+5  malloc#0      6480720      131264
+6  malloc#6      6560528        8336
+                                                                                                                                                                                                                                                          BackTrace
+1                                                                                                      moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff6279601/libnuma.so.1:0x7ffff5ba3731/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+2                                              moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff7584432:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+3 moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff758e275:0x7ffff758f92e:0x7ffff758fa62:0x7ffff75842cc:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+4                moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff758f323:0x7ffff758fa72:0x7ffff75842cc:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+5                                                                                                      moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5e98601/libnuma.so.1:0x7ffff5199731/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+6                                                             moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff7581118:0x7ffff7582067:0x7ffff75a1483:0x7ffff756bb13:0x7ffff7525897:0x7ffff754062corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+  AddressEnd
+1    6366128
+2    6390496
+3    6412642
+4    6481976
+5    6611984
+6    6568864
+[1] 6722563
+   user  system elapsed 
+ 38.076   1.292  41.490
+Big Integer ('bigz') :
+[1] 6300496
+Big Integer ('bigz') :
+[1] 140737488351232
+[1] 6722563
+#+end_example
+
+
+#+begin_src R :results output :session :exports both
+#system.time(l <- subset(k, k$Address >= minA & k$Address <= maxA));
+system.time(l <- k[which(k$Address >= minA & k$Address <= maxA),]);
+#head(l)
+str(l)
+nrow(l)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+  7.384   0.544   7.927
+'data.frame':	6722535 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:95442076] e7 93 66 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Start   : int  410 410 410 410 410 410 410 410 410 410 ...
+ $ End     : int  947 947 947 947 947 947 947 947 947 947 ...
+ $ Tid     : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ N       : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Duration: int  537 537 537 537 537 537 537 537 537 537 ...
+[1] 6722535
+#+end_example
+
+Lot of accesses here, but we have evrything from the mallocs to the
+dynamic librarys, including the stacks. Let see if it is not too much
+for the end:
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+
+# Compute accesses type
+
+m <- l
+system.time(m$aType <- ifelse(m$Write >0,"Write", "Read"));
+system.time(m$sType <- ifelse(m$N > 1,"Shared","Private"));
+system.time(m$Type <- paste(m$sType,m$aType,sep="_"));
+m$sType <- NULL
+m$aType <- NULL
+head(m)
+
+# Compute data structure name and offset
+n <- m
+structs$BackTrace <- NULL
+head(structs)
+getStructReverse <- function (vect){
+  name <- 1
+  start <- 2
+  end <- 4
+  return (ifelse(n$Address >= vect[start] & n$Address <= vect[end],
+                paste(vect[name],as.bigz(n$Address) - as.bigz(vect[start]),sep="@"),""));
+}
+system.time(ans <- as.data.frame(apply(structs,1,getStructReverse)))
+system.time(vect <- apply(ans,1,paste,collapse=""));
+#str(vect)
+system.time(vect <- strsplit(vect,"@"))
+#str(vect)
+system.time(n$Structure <- unlist(lapply(vect,"[",1)))
+system.time(n$Offset <- as.integer(unlist(lapply(vect,"[",2)))/4096);
+#str(n)
+head(n)
+nrow(n)
+
+# Aggregate
+system.time(o <- aggregate(n[,c('Reads','Writes', 'N')],n[,c('Structure','Offset', 'Type', 'Start', 'End')], function(d) sum(d)));
+head(o)
+
+proc.time() - ptm
+#+end_src
+
+Still to slow, I killed it during the getStructReverse step ...
+
+Let's try to remove every allocs in external data structures:
+
+#+begin_src sh :results output :exports both :session
+cd Moca-lulesh2.0-2016-06-03_11-22-13
+grep -v "lib[^c]" structs-uniq.csv > structs-filtered.csv
+wc -l structs-filtered.csv
+./merge_mallocs.sh structs-filtered.csv structs-filtered-merged.csv
+head  structs-filtered-merged.csv
+wc -l structs-filtered-merged.csv
+grep -i malloc structs-filtered-merged.csv | wc -l
+#+end_src
+
+#+RESULTS:
+#+begin_example
+150063 structs-filtered.csv
+name,addr,size,backtrace
+malloc#177,11228032,327960,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/lulesh2.0:0x4103b2:0x409b67/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+malloc#192,11617840,120480,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/lulesh2.0:0x4103b2:0x409b67/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+malloc#207,11800288,114688,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/lulesh2.0:0x4103b2:0x409b67/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+malloc#223,12012416,414208,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/lulesh2.0:0x4103b2:0x409b67/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+malloc#239,12524064,311680,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/lulesh2.0:0x4103b2:0x409b67/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+malloc#255,12933056,153344,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/lulesh2.0:0x4103b2:0x409b67/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+malloc#271,13183840,765440,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/lulesh2.0:0x4103b2:0x409b67/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+malloc#287,14046720,2297040,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/lulesh2.0:0x4103b2:0x409b67/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+malloc#338,17490576,327960,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/lulesh2.0:0x4103b2:0x409b67/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+9330 structs-filtered-merged.csv
+9325
+#+end_example
+
+
+So we won around 100 mallocs but we still have way to much data
+allocations ...
+
+I think this trace is unexploitable, I will retry to build the OpenMP4 version.
+* 2016-06-07 Lulesh OpenMP4                                           :David:
+
+
+After installing gcc-6 and playing a little bit with the Makefile, I
+managed to compile Lulesh2.0 OpenMP4 from this link:
+https://codesign.llnl.gov/lulesh/lulesh2_OMP4.tgz
+
+There is a trace on 5 iterations (I'm currently running a bigger trace):
+https://ligcloud.imag.fr/public.php?service=files&t=4d198b9979efb7aeaa6787828b424986
+https://ligcloud.imag.fr/public.php?service=files&t=717aac10aed065c085d756e6b8587f7f
+
+The trace is available here
+https://ligcloud.imag.fr/public.php?service=files&t=5acce6531549a02502030327d6ca42da
+
+#+begin_src sh :results output :exports both :session
+md5sum lulesh-OMP4.tgz
+#+end_src
+
+#+RESULTS:
+: fb9f277437300c6276082933afc36fbe  lulesh-OMP4.tgz
+
+#+begin_src sh :results output :exports both :session
+#tar xvzf lulesh-OMP4.tgz
+cd Moca-lulesh2.0-2016-06-07_14-39-32
+# Already done on grid5000 (requires a huge amount of memory)
+#~/Work/Moca/src/utils/create_event_producer.sh 4096 Moca-full-trace.csv
+#~/Work/Moca/src/utils/retrieve_stacks.sh stacks.log structs.csv
+head Moca-framesoc.csv
+sort -n -t',' -k2,2 structs.csv | \
+awk -F , 'BEGIN{p="";cpt=1} {if(p==$1){n=$1"-"cpt;cpt++}\
+else{cpt=1;n=$1};p=$1;print n","$2","$3","$4}'  > structs-uniq.csv
+head  structs-uniq.csv
+wc -l structs-uniq.csv
+grep -i malloc structs-uniq.csv | wc -l
+#+end_src
+
+#+RESULTS:
+#+begin_example
+e0f5bb91d2396c489922fa08c43c35d2  lulesh-OMP4.tgz
+@Virt,@Phy,Nreads,Nwrites,CPUMask,Start,End,TaskId,Shared
+0000000000400040,000062000b2390e8,1,0,000001011,1,2376,0,1
+0000000000405435,000062000b2390b0,1,0,000000111,1,2376,0,1
+0000000000414b80,000062000b239078,1,0,000001011,1,2370,0,1
+0000000000414b80,000062000b239078,1,0,000001011,2370,2376,0,2
+0000000000414e80,0000000000414e80,1,0,000000011,2370,2376,3,2
+0000000000414e80,0000000000414e80,1,0,000000011,2376,2623,3,1
+000000000041d800,000000000041d800,1,0,000000111,1,2376,0,1
+0000000000420fa0,0000000000420fa0,1,0,000000111,1,2376,0,1
+0000000000433950,0000000000433950,1,0,000000111,1,2376,0,1
+stack,140725093629952,135168,NA
+stack:4352,140737085673472,8388608,NA
+stack:4348,140737094066176,8388608,NA
+stack:4340,140737102458880,8388608,NA
+stack:4339,140737110851584,8388608,NA
+stack:4338,140737119244288,8388608,NA
+stack:4617,140737119244288,8388608,NA
+stack:4353,140737127636992,8388608,NA
+stack:4002,140737135812608,8388608,NA
+stack:4205,140737136029696,8388608,NA
+83 structs-uniq.csv
+0
+#+end_example
+
+So this time we have no mallocs, no static data structures, only a lot
+of stacks ...
+This benchmark is quite weird...
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+library(gmp)
+
+
+system.time(k <- read.csv("Moca-lulesh2.0-2016-06-07_14-39-32/Moca-framesoc.csv", header=T));
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+# Use bigz to parse
+k$Address <- as.bigz(paste("0x", k$Address, sep=""))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Duration <- k$End - k$Start
+head(k);
+str(k)
+
+# Add structure info
+structs <- read.csv("Moca-lulesh2.0-2016-06-07_14-39-32/structs-uniq.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize", "BackTrace");
+structs$AddressStart <- as.bigz(structs$AddressStart)
+structs$AddressSize <- as.bigz(structs$AddressSize)
+structs$AddressEnd <- structs$AddressStart + structs$AddressSize
+head(structs)
+# Filter interesting data structure as soon as possible
+# The following line is specific to matrix, adapt it for other analysis
+# structs <- structs[grepl("stack",structs$Structure),]
+str(structs)
+head(structs)
+
+# Retrieve struct infos
+nrow(k)
+# These lines are specific to matrix, adapt it for other analysis
+minA <- structs[1,2]
+maxA <- structs[nrow(structs),5];
+proc.time() - ptm
+show(minA)
+show(maxA)
+nrow(k)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+
+Attaching package: ‘gmp’
+
+The following objects are masked from ‘package:base’:
+
+    %*%, apply, crossprod, matrix, tcrossprod
+   user  system elapsed 
+  0.344   0.004   0.351
+            X.Virt            X.Phy Nreads Nwrites CPUMask Start  End TaskId
+1 0000000000400040 000062000b2390e8      1       0    1011     1 2376      0
+2 0000000000405435 000062000b2390b0      1       0     111     1 2376      0
+3 0000000000414b80 000062000b239078      1       0    1011     1 2370      0
+4 0000000000414b80 000062000b239078      1       0    1011  2370 2376      0
+5 0000000000414e80 0000000000414e80      1       0      11  2370 2376      3
+6 0000000000414e80 0000000000414e80      1       0      11  2376 2623      3
+  Shared
+1      1
+2      1
+3      1
+4      2
+5      2
+6      1
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+  Address Reads Writes Start  End Tid N Duration
+1 4194368     1      0     1 2376   0 1     2375
+2 4215861     1      0     1 2376   0 1     2375
+3 4279168     1      0     1 2370   0 1     2369
+4 4279168     1      0  2370 2376   0 2        6
+5 4279936     1      0  2370 2376   3 2        6
+6 4279936     1      0  2376 2623   3 1      247
+'data.frame':	51702 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:641436] f6 c9 00 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 1 1 2370 2370 2376 1 1 1 1 ...
+ $ End     : int  2376 2376 2370 2376 2376 2623 2376 2376 2376 2376 ...
+ $ Tid     : int  0 0 0 0 3 3 0 0 0 0 ...
+ $ N       : int  1 1 1 2 2 1 1 1 1 1 ...
+ $ Duration: int  2375 2375 2369 6 6 247 2375 2375 2375 2375 ...
+   Structure    AddressStart AddressSize BackTrace      AddressEnd
+1 stack:4352 140737085673472     8388608        NA 140737094062080
+2 stack:4348 140737094066176     8388608        NA 140737102454784
+3 stack:4340 140737102458880     8388608        NA 140737110847488
+4 stack:4339 140737110851584     8388608        NA 140737119240192
+5 stack:4338 140737119244288     8388608        NA 140737127632896
+6 stack:4617 140737119244288     8388608        NA 140737127632896
+'data.frame':	82 obs. of  5 variables:
+ $ Structure   : Factor w/ 82 levels "stack","stack:3989",..: 41 40 34 33 32 62 42 15 19 25 ...
+ $ AddressStart:Class 'bigz'  raw [1:1316] 52 00 00 00 ...
+ $ AddressSize :Class 'bigz'  raw [1:988] 52 00 00 00 ...
+ $ BackTrace   : logi  NA NA NA NA NA NA ...
+ $ AddressEnd  :Class 'bigz'  raw [1:1316] 52 00 00 00 ...
+   Structure    AddressStart AddressSize BackTrace      AddressEnd
+1 stack:4352 140737085673472     8388608        NA 140737094062080
+2 stack:4348 140737094066176     8388608        NA 140737102454784
+3 stack:4340 140737102458880     8388608        NA 140737110847488
+4 stack:4339 140737110851584     8388608        NA 140737119240192
+5 stack:4338 140737119244288     8388608        NA 140737127632896
+6 stack:4617 140737119244288     8388608        NA 140737127632896
+[1] 51702
+   user  system elapsed 
+  0.536   0.012   0.616
+Big Integer ('bigz') :
+[1] 140737085673472
+Big Integer ('bigz') :
+[1] 140737488351232
+[1] 51702
+#+end_example
+
+
+#+begin_src R :results output :session :exports both
+#system.time(l <- subset(k, k$Address >= minA & k$Address <= maxA));
+system.time(l <- k[which(k$Address >= minA & k$Address <= maxA),]);
+#head(l)
+str(l)
+nrow(l)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+  0.068   0.000   0.070
+'data.frame':	5222 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:83556] 66 14 00 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  1 0 1 1 0 1 1 0 1 1 ...
+ $ Start   : int  18858 18884 45433 18846 18884 45433 18846 18878 45433 18846 ...
+ $ End     : int  18864 19551 46765 18856 19551 46765 18856 19566 46765 18856 ...
+ $ Tid     : int  0 116 0 0 116 0 0 111 0 0 ...
+ $ N       : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Duration: int  6 667 1332 10 667 1332 10 688 1332 10 ...
+[1] 5222
+#+end_example
+
+Ok this is a small trace we don't have many accesses, I think we won't
+see anything ...
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+
+# Compute accesses type
+
+m <- l
+system.time(m$aType <- ifelse(m$Write >0,"Write", "Read"));
+system.time(m$sType <- ifelse(m$N > 1,"Shared","Private"));
+system.time(m$Type <- paste(m$sType,m$aType,sep="_"));
+m$sType <- NULL
+m$aType <- NULL
+head(m)
+
+# Compute data structure name and offset
+n <- m
+structs$BackTrace <- NULL
+head(structs)
+getStructReverse <- function (vect){
+  name <- 1
+  start <- 2
+  end <- 4
+  return (ifelse(n$Address >= vect[start] & n$Address <= vect[end],
+                paste(vect[name],as.bigz(n$Address) - as.bigz(vect[start]),sep="@"),""));
+}
+system.time(ans <- as.data.frame(apply(structs,1,getStructReverse)))
+system.time(vect <- apply(ans,1,paste,collapse=""));
+#str(vect)
+system.time(vect <- strsplit(vect,"@"))
+#str(vect)
+system.time(n$Structure <- unlist(lapply(vect,"[",1)))
+system.time(n$Offset <- as.integer(unlist(lapply(vect,"[",2)))/4096);
+#str(n)
+head(n)
+nrow(n)
+
+# Aggregate
+system.time(o <- aggregate(n[,c('Reads','Writes', 'N')],n[,c('Structure','Offset', 'Type', 'Start', 'End')], function(d) sum(d)));
+head(o)
+
+proc.time() - ptm
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+  0.004   0.000   0.003
+   user  system elapsed 
+  0.004   0.000   0.002
+   user  system elapsed 
+  0.000   0.000   0.001
+              Address Reads Writes Start   End Tid N Duration          Type
+46481 140737094057784     1      1 18858 18864   0 1        6 Private_Write
+46482 140737094057560     1      0 18884 19551 116 1      667  Private_Read
+46483 140737094057784     1      1 45433 46765   0 1     1332 Private_Write
+46484 140737094061456     1      1 18846 18856   0 1       10 Private_Write
+46485 140737094059672     1      0 18884 19551 116 1      667  Private_Read
+46486 140737094061456     1      1 45433 46765   0 1     1332 Private_Write
+   Structure    AddressStart AddressSize      AddressEnd
+1 stack:4352 140737085673472     8388608 140737094062080
+2 stack:4348 140737094066176     8388608 140737102454784
+3 stack:4340 140737102458880     8388608 140737110847488
+4 stack:4339 140737110851584     8388608 140737119240192
+5 stack:4338 140737119244288     8388608 140737127632896
+6 stack:4617 140737119244288     8388608 140737127632896
+   user  system elapsed 
+  1.556   0.000   1.567
+   user  system elapsed 
+  0.160   0.008   0.166
+   user  system elapsed 
+  0.028   0.000   0.029
+   user  system elapsed 
+  0.004   0.000   0.002
+   user  system elapsed 
+  0.000   0.000   0.003 
+Warning message:
+In system.time(n$Offset <- as.integer(unlist(lapply(vect, "[", 2)))/4096) :
+  NAs introduced by coercion
+              Address Reads Writes Start   End Tid N Duration          Type
+46481 140737094057784     1      1 18858 18864   0 1        6 Private_Write
+46482 140737094057560     1      0 18884 19551 116 1      667  Private_Read
+46483 140737094057784     1      1 45433 46765   0 1     1332 Private_Write
+46484 140737094061456     1      1 18846 18856   0 1       10 Private_Write
+46485 140737094059672     1      0 18884 19551 116 1      667  Private_Read
+46486 140737094061456     1      1 45433 46765   0 1     1332 Private_Write
+       Structure Offset
+46481 stack:4352   2047
+46482 stack:4352   2047
+46483 stack:4352   2047
+46484 stack:4352   2048
+46485 stack:4352   2047
+46486 stack:4352   2048
+[1] 5222
+   user  system elapsed 
+  0.064   0.000   0.064
+   Structure  Offset          Type Start  End Reads Writes N
+1      stack   32.99 Private_Write     1    1     1      1 1
+2 stack:3989 2046.95 Private_Write     1 2370     1      1 1
+3 stack:4353 1427.15 Private_Write  2371 2373     1      1 1
+4 stack:3992 2047.85 Private_Write     1 2374     1      1 1
+5      stack   32.00 Private_Write     1 2376     1      1 1
+6      stack   32.88 Private_Write     1 2376     1      1 1
+   user  system elapsed 
+  2.100   0.008   2.702
+#+end_example
+
+So obviously this time it was fast, let's try to plot these results:
+
+#+begin_src R :results output graphics :file img/struct_importance_share_lulesh.png :exports both :width 600 :height 400 :session
+library(plyr)
+q <- ddply(o,.(Structure),summarize,Share=sum(N),Nacc=sum(Reads+Writes))
+library(ggplot2);
+p <- ggplot(q,aes(x=Structure,y=Share, fill=Structure)) +
+  geom_bar(stat="identity") +
+  theme_bw() +
+  theme(panel.grid.minor = element_line(colour = "black", linetype="dashed", size = 0.1),
+    panel.grid.major = element_line(colour = "black", size = 0.1)) +
+  scale_y_log10()
+  #lab=("Data structure name") +
+  #ylab=("Number of accesses") +
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/struct_importance_share_lulesh.png]]
+
+
+So the accesses are mostly on three stacks 3992, 3993 and 4353
+
+#+begin_src R :results output graphics :file img/struct_importance_nacc_lulesh.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q,aes(x=Structure,y=Nacc, fill=Structure)) +
+  geom_bar(stat="identity") +
+  theme_bw() +
+  theme(panel.grid.minor = element_line(colour = "black", linetype="dashed", size = 0.1),
+    panel.grid.major = element_line(colour = "black", size = 0.1)) +
+  scale_y_log10()
+  #lab=("Data structure name") +
+  #ylab=("Number of accesses") +
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/struct_importance_nacc_lulesh.png]]
+
+Same behavior for the sharing
+
+
+#+begin_src R :results output graphics :file img/intensity_Rw_lulesh.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(o) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=Reads+Writes)) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_Rw_lulesh.png]]
+
+
+We can see way more things than what I thought !
+- The first 8 stacks and the last one seems to be used only at the
+  beginning of the execution, while the 4 others are used mostly at
+  the end.
+  - Why have we so much stacks ?
+  - Is it an OpenMP weirdness ?
+- All stacks are mostly used privately
+
+
+
+#+begin_src R :results output :session :exports both
+q <- o[grepl("(3991|3992|4353)",o$Structure),]
+head(q)
+#+end_src
+
+#+RESULTS:
+:     Structure Offset          Type Start  End Reads Writes N
+: 3  stack:4353   1427 Private_Write  2371 2373     1      1 1
+: 4  stack:3992   2048 Private_Write     1 2374     1      1 1
+: 8  stack:4353   1381 Private_Write     1 2376     1      1 1
+: 9  stack:4353   1382 Private_Write     1 2376     1      1 1
+: 11 stack:3991   2047 Private_Write     1 2376     1      1 1
+: 12 stack:3992   2047 Private_Write     1 2376     1      1 1
+
+#+begin_src R :results output graphics :file img/intensity_Rw_lulesh_zoom.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=Reads+Writes)) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_Rw_lulesh_zoom.png]]
+
+And the sharing pattern:
+
+#+begin_src R :results output graphics :file img/intensity_share_lulesh.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=as.factor(N))) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_share_lulesh.png]]
+* 2016-06-09 Second try on lulesh Mpi                                 :David:
+
+I tried another approach to merge data structures on lulesh OMPi: I
+merge two mallocs if they are consecutive and they comes from the same
+code instruction. Furthermore, I remove every mallocs that comes from
+an external lib:
+
+#+begin_src sh :results output :exports both :session
+cd Moca-lulesh2.0-2016-06-03_11-22-13
+# Already done on grid5000 (requires a huge amount of memory)
+#~/Work/Moca/src/utils/create_event_producer.sh 4096 Moca-full-trace.csv
+#~/Work/Moca/src/utils/retrieve_stacks.sh stacks.log structs.csv
+head Moca-framesoc.csv
+sort -n -t',' -k2,2 structs.csv | \
+awk -F , 'BEGIN{p="";cpt=1} {if(p==$1){n=$1"-"cpt;cpt++}\
+else{cpt=1;n=$1};p=$1;print n","$2","$3","$4}'  > structs-uniq.csv
+head  structs-uniq.csv
+wc -l structs-uniq.csv
+grep -i malloc structs-uniq.csv | wc -l
+#+end_src
+
+#+RESULTS:
+#+begin_example
+@Virt,@Phy,Nreads,Nwrites,CPUMask,Start,End,TaskId,Shared
+0000000000400040,000062000288c510,1,0,000000110,1,409,0,1
+00000000004002b8,0000620014ef6f88,1,0,000100000,410,410,1,1
+00000000004002b8,0000620014ef6f88,1,0,000100000,410,947,1,1
+0000000000400040,0000620014ef6f88,1,0,000000100,410,947,1,1
+0000000000400040,0000620014ef6f88,1,0,000000100,947,947,1,1
+0000000000400280,000062000288c510,1,0,000000110,1262,1495,0,1
+00000000004002e0,000062000288c510,1,0,000000110,1496,1968,0,1
+0000000000405435,000062000a932b38,1,0,000100110,1,409,0,1
+00000000004147e0,00006200028c5968,1,0,000010110,2290,4586,0,1
+name,addr,size,backtrace
+malloc#0,6300496,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff6279601/libnuma.so.1:0x7ffff5ba3731/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#1,6338752,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff6279601:0x7ffff62aabf6:0x7ffff627f830/libnuma.so.1:0x7ffff5ba380b/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#2,6386400,4096,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff7584432:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#3,6396256,16386,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff758e275:0x7ffff758f92e:0x7ffff758fa62:0x7ffff75842cc:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#4,6416432,65544,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libopen-rte.so.4:0x7ffff758f323:0x7ffff758fa72:0x7ffff75842cc:0x7ffff7584587:0x7ffff758490d:0x7ffff7583e90:0x7ffff758fd5a:0x7ffff756b9dd:0x7ffff754054corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#0,6480720,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5e98601/libnuma.so.1:0x7ffff5199731/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#5,6505920,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff6279601/libltdl.so.7:0x7ffff678fd16:0x7ffff678f831:0x7ffff6790389/libopen-rte.so.4:0x7ffff75814d9:0x7ffff7582067:0x7ffff7599181:0x7ffff756bac8:0x7ffff7525897:0x7ffff754062corted:0x400848/libc.so.6:0x7ffff61e7b45orted:0x400899
+malloc#1,6517312,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5e98601:0x7ffff5ec9bf6:0x7ffff5e9e830/libnuma.so.1:0x7ffff519980b/ld-linux-x86-64.so.2:0x7ffff7dea9bd:0x7ffff7deaae3:0x7ffff7ddd1ca
+malloc#2,6553552,32816,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libc.so.6:0x7ffff5e98601:0x7ffff5ec9bf6:0x7ffff5e9e830/libgomp.so.1:0x7ffff65d07b0:0x7ffff65c5d2d/ld-linux-x86-64.so.2:0x7ffff7dea9fa:0x7ffff7deaae3:0x7ffff7ddd1ca
+150317 structs-uniq.csv
+150306
+#+end_example
+
+
+#+begin_src sh :results output :exports both :session
+cd Moca-lulesh2.0-2016-06-03_11-22-13
+./merge_mallocs_stacks.sh structs-uniq.csv structs-merged-by-stacks.csv
+head  structs-merged-by-stacks.csv
+wc -l structs-merged-by-stacks.csv
+grep -i malloc structs-merged-by-stacks.csv | wc -l
+#+end_src
+
+#+RESULTS:
+: name,addr,size,backtrace
+: stack:1517,140737154670592,50331648,NA
+: malloc#172,140737200750608,2160000,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6b372e8/lulesh2.0:0x40aa94/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+: stack:1511,140737205026816,8388608,NA
+: malloc#170,140737211740176,16796568,moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6b372e8/lulesh2.0:0x40ae73/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+: __GI___pthread_keys,140737332867808,32768,NA
+: stack,140737488216064,135168,NA
+: 7 structs-merged-by-stacks.csv
+: 2
+
+So this is a usable number of data structure, let see if we can use
+this trace:
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+library(gmp)
+
+
+system.time(k <- read.csv("Moca-lulesh2.0-2016-06-03_11-22-13/Moca-framesoc.csv", header=T));
+options("scipen"=100, "digits"=4);
+head(k);
+
+sapply(k, class);
+
+names(k) <- c("Address", "Phy", "Reads", "Writes", "CPU", "Start", "End", "Tid", "N");
+
+# Use bigz to parse
+k$Address <- as.bigz(paste("0x", k$Address, sep=""))
+k$Phy <- NULL;
+k$CPU <- NULL;
+k$Duration <- k$End - k$Start
+head(k);
+str(k)
+
+# Add structure info
+structs <- read.csv("Moca-lulesh2.0-2016-06-03_11-22-13/structs-merged-by-stacks.csv");
+names(structs) <- c("Structure", "AddressStart", "AddressSize", "BackTrace");
+structs$AddressStart <- as.bigz(structs$AddressStart)
+structs$AddressSize <- as.bigz(structs$AddressSize)
+structs$AddressEnd <- structs$AddressStart + structs$AddressSize
+head(structs)
+# Filter interesting data structure as soon as possible
+# The following line is specific to matrix, adapt it for other analysis
+# structs <- structs[grepl("stack",structs$Structure),]
+str(structs)
+head(structs)
+
+# Retrieve struct infos
+nrow(k)
+# These lines are specific to matrix, adapt it for other analysis
+minA <- structs[1,2]
+maxA <- structs[nrow(structs),5];
+proc.time() - ptm
+show(minA)
+show(maxA)
+nrow(k)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+ 26.496   0.408  26.970
+            X.Virt            X.Phy Nreads Nwrites CPUMask Start  End TaskId
+1 0000000000400040 000062000288c510      1       0     110     1  409      0
+2 00000000004002b8 0000620014ef6f88      1       0  100000   410  410      1
+3 00000000004002b8 0000620014ef6f88      1       0  100000   410  947      1
+4 0000000000400040 0000620014ef6f88      1       0     100   410  947      1
+5 0000000000400040 0000620014ef6f88      1       0     100   947  947      1
+6 0000000000400280 000062000288c510      1       0     110  1262 1495      0
+  Shared
+1      1
+2      1
+3      1
+4      1
+5      1
+6      1
+   X.Virt     X.Phy    Nreads   Nwrites   CPUMask     Start       End    TaskId 
+ "factor"  "factor" "integer" "integer" "integer" "integer" "integer" "integer" 
+   Shared 
+"integer"
+  Address Reads Writes Start  End Tid N Duration
+1 4194368     1      0     1  409   0 1      408
+2 4195000     1      0   410  410   1 1        0
+3 4195000     1      0   410  947   1 1      537
+4 4194368     1      0   410  947   1 1      537
+5 4194368     1      0   947  947   1 1        0
+6 4194944     1      0  1262 1495   0 1      233
+'data.frame':	6722563 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:95442412] 03 94 66 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  0 0 0 0 0 0 0 0 0 0 ...
+ $ Start   : int  1 410 410 410 947 1262 1496 1 2290 1 ...
+ $ End     : int  409 410 947 947 947 1495 1968 409 4586 409 ...
+ $ Tid     : int  0 1 1 1 1 0 0 0 0 0 ...
+ $ N       : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Duration: int  408 0 537 537 0 233 472 408 2296 408 ...
+            Structure    AddressStart AddressSize
+1          stack:1517 140737154670592    50331648
+2          malloc#172 140737200750608     2160000
+3          stack:1511 140737205026816     8388608
+4          malloc#170 140737211740176    16796568
+5 __GI___pthread_keys 140737332867808       32768
+6               stack 140737488216064      135168
+                                                                                                                           BackTrace
+1                                                                                                                               <NA>
+2 moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6b372e8/lulesh2.0:0x40aa94/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+3                                                                                                                               <NA>
+4 moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6b372e8/lulesh2.0:0x40ae73/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+5                                                                                                                               <NA>
+6                                                                                                                               <NA>
+       AddressEnd
+1 140737205002240
+2 140737202910608
+3 140737213415424
+4 140737228536744
+5 140737332900576
+6 140737488351232
+'data.frame':	6 obs. of  5 variables:
+ $ Structure   : Factor w/ 6 levels "__GI___pthread_keys",..: 6 3 5 2 1 4
+ $ AddressStart:Class 'bigz'  raw [1:100] 06 00 00 00 ...
+ $ AddressSize :Class 'bigz'  raw [1:76] 06 00 00 00 ...
+ $ BackTrace   : Factor w/ 2 levels "moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6b372e8/lulesh2.0:0x40aa94/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b"| __truncated__,..: NA 1 NA 2 NA NA
+ $ AddressEnd  :Class 'bigz'  raw [1:100] 06 00 00 00 ...
+            Structure    AddressStart AddressSize
+1          stack:1517 140737154670592    50331648
+2          malloc#172 140737200750608     2160000
+3          stack:1511 140737205026816     8388608
+4          malloc#170 140737211740176    16796568
+5 __GI___pthread_keys 140737332867808       32768
+6               stack 140737488216064      135168
+                                                                                                                           BackTrace
+1                                                                                                                               <NA>
+2 moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6b372e8/lulesh2.0:0x40aa94/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+3                                                                                                                               <NA>
+4 moca.so:0x7ffff77dad9d:0x7ffff77da9bd/libstdc++.so.6:0x7ffff6b372e8/lulesh2.0:0x40ae73/libc.so.6:0x7ffff5e06b45/lulesh2.0:0x40b5af
+5                                                                                                                               <NA>
+6                                                                                                                               <NA>
+       AddressEnd
+1 140737205002240
+2 140737202910608
+3 140737213415424
+4 140737228536744
+5 140737332900576
+6 140737488351232
+[1] 6722563
+   user  system elapsed 
+ 36.696   0.888  39.997
+Big Integer ('bigz') :
+[1] 140737154670592
+Big Integer ('bigz') :
+[1] 140737488351232
+[1] 6722563
+#+end_example
+
+
+#+begin_src R :results output :session :exports both
+#system.time(l <- subset(k, k$Address >= minA & k$Address <= maxA));
+system.time(l <- k[which(k$Address >= minA & k$Address <= maxA),]);
+#head(l)
+str(l)
+nrow(l)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+  5.772   0.328   6.101
+'data.frame':	1078531 obs. of  8 variables:
+ $ Address :Class 'bigz'  raw [1:17256500] 03 75 10 00 ...
+ $ Reads   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ Writes  : int  1 1 0 0 0 1 1 0 0 0 ...
+ $ Start   : int  2290 4573 4573 4586 11638 2290 4573 4573 4586 4595 ...
+ $ End     : int  4573 4586 4586 11631 24092 4573 4586 4586 4595 11561 ...
+ $ Tid     : int  0 0 7 7 7 0 0 7 7 7 ...
+ $ N       : int  1 2 2 1 1 1 2 2 1 2 ...
+ $ Duration: int  2283 13 13 7045 12454 2283 13 13 9 6966 ...
+[1] 1078531
+#+end_example
+
+#+begin_src R :results output :session :exports both
+ptm <- proc.time()
+
+# Compute accesses type
+
+m <- l
+system.time(m$aType <- ifelse(m$Write >0,"Write", "Read"));
+system.time(m$sType <- ifelse(m$N > 1,"Shared","Private"));
+system.time(m$Type <- paste(m$sType,m$aType,sep="_"));
+m$sType <- NULL
+m$aType <- NULL
+head(m)
+
+# Compute data structure name and offset
+n <- m
+structs$BackTrace <- NULL
+head(structs)
+getStructReverse <- function (vect){
+  name <- 1
+  start <- 2
+  end <- 4
+  return (ifelse(n$Address >= vect[start] & n$Address <= vect[end],
+                paste(vect[name],as.bigz(n$Address) - as.bigz(vect[start]),sep="@"),""));
+}
+system.time(ans <- as.data.frame(apply(structs,1,getStructReverse)))
+system.time(vect <- apply(ans,1,paste,collapse=""));
+#str(vect)
+system.time(vect <- strsplit(vect,"@"))
+#str(vect)
+system.time(n$Structure <- unlist(lapply(vect,"[",1)))
+system.time(n$Offset <- as.integer(unlist(lapply(vect,"[",2)))/4096);
+#str(n)
+head(n)
+nrow(n)
+
+# Aggregate
+system.time(o <- aggregate(n[,c('Reads','Writes', 'N')],n[,c('Structure','Offset', 'Type', 'Start', 'End')], function(d) sum(d)));
+head(o)
+
+proc.time() - ptm
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   user  system elapsed 
+  0.248   0.000   0.251
+   user  system elapsed 
+  0.232   0.000   0.232
+   user  system elapsed 
+  0.208   0.000   0.210
+                Address Reads Writes Start   End Tid N Duration          Type
+5644033 140737163054904     1      1  2290  4573   0 1     2283 Private_Write
+5644034 140737163054904     1      1  4573  4586   0 2       13  Shared_Write
+5644035 140737163054632     1      0  4573  4586   7 2       13   Shared_Read
+5644036 140737163054632     1      0  4586 11631   7 1     7045  Private_Read
+5644037 140737163054672     1      0 11638 24092   7 1    12454  Private_Read
+5644038 140737163058576     1      1  2290  4573   0 1     2283 Private_Write
+            Structure    AddressStart AddressSize      AddressEnd
+1          stack:1517 140737154670592    50331648 140737205002240
+2          malloc#172 140737200750608     2160000 140737202910608
+3          stack:1511 140737205026816     8388608 140737213415424
+4          malloc#170 140737211740176    16796568 140737228536744
+5 __GI___pthread_keys 140737332867808       32768 140737332900576
+6               stack 140737488216064      135168 140737488351232
+   user  system elapsed 
+  13.24    0.18   13.43
+   user  system elapsed 
+  5.992   0.000   5.996
+   user  system elapsed 
+  1.372   0.000   1.373
+   user  system elapsed 
+  0.968   0.000   0.969
+   user  system elapsed 
+  0.620   0.000   0.621 
+Warning message:
+In system.time(n$Offset <- as.integer(unlist(lapply(vect, "[", 2)))/4096) :
+  NAs introduced by coercion
+                Address Reads Writes Start   End Tid N Duration          Type
+5644033 140737163054904     1      1  2290  4573   0 1     2283 Private_Write
+5644034 140737163054904     1      1  4573  4586   0 2       13  Shared_Write
+5644035 140737163054632     1      0  4573  4586   7 2       13   Shared_Read
+5644036 140737163054632     1      0  4586 11631   7 1     7045  Private_Read
+5644037 140737163054672     1      0 11638 24092   7 1    12454  Private_Read
+5644038 140737163058576     1      1  2290  4573   0 1     2283 Private_Write
+         Structure Offset
+5644033 stack:1517   2047
+5644034 stack:1517   2047
+5644035 stack:1517   2047
+5644036 stack:1517   2047
+5644037 stack:1517   2047
+5644038 stack:1517   2048
+[1] 1078531
+   user  system elapsed 
+ 40.500   0.012  40.617
+  Structure Offset          Type Start End Reads Writes N
+1     stack  32.89 Private_Write     1   1     1      1 1
+2     stack  32.99 Private_Write     1   1     1      1 1
+3     stack  28.00 Private_Write     1 409     1      1 1
+4     stack  28.15 Private_Write     1 409     1      1 1
+5     stack  32.00 Private_Write     1 409     1      1 1
+6     stack  32.29 Private_Write     1 409     1      1 1
+   user  system elapsed 
+ 64.904   0.192  68.474
+#+end_example
+
+
+It worked this time, let's visualize this trace !
+
+#+begin_src R :results output graphics :file img/struct_importance_share_luleshOMPI.png :exports both :width 600 :height 400 :session
+library(plyr)
+q <- ddply(o,.(Structure),summarize,Share=sum(N),Nacc=sum(Reads+Writes))
+library(ggplot2);
+p <- ggplot(q,aes(x=Structure,y=Share, fill=Structure)) +
+  geom_bar(stat="identity") +
+  theme_bw() +
+  theme(panel.grid.minor = element_line(colour = "black", linetype="dashed", size = 0.1),
+    panel.grid.major = element_line(colour = "black", size = 0.1)) +
+  scale_y_log10()
+  #lab=("Data structure name") +
+  #ylab=("Number of accesses") +
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/struct_importance_share_luleshOMPI.png]]
+
+
+Obviously most of the accesses are in the merged malloc
+
+#+begin_src R :results output graphics :file img/struct_importance_nacc_luleshOMPI.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q,aes(x=Structure,y=Nacc, fill=Structure)) +
+  geom_bar(stat="identity") +
+  theme_bw() +
+  theme(panel.grid.minor = element_line(colour = "black", linetype="dashed", size = 0.1),
+    panel.grid.major = element_line(colour = "black", size = 0.1)) +
+  scale_y_log10()
+  #lab=("Data structure name") +
+  #ylab=("Number of accesses") +
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/struct_importance_nacc_luleshOMPI.png]]
+
+Same behavior as for the sharing
+
+
+#+begin_src R :results output graphics :file img/intensity_Rw_luleshOMPI.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(o) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=Reads+Writes)) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_Rw_luleshOMPI.png]]
+
+
+This is very interesting, let zoom on the malloc
+
+
+#+begin_src R :results output :session :exports both
+q <- o[grepl("malloc",o$Structure),]
+head(q)
+#+end_src
+
+#+RESULTS:
+:     Structure Offset         Type Start  End Reads Writes N
+: 33 malloc#170  941.8 Private_Read  2290 2290     1      0 1
+: 34 malloc#170 1471.8 Private_Read  2290 2290     1      0 1
+: 35 malloc#170 1997.8 Private_Read  2290 2290     1      0 1
+: 36 malloc#170 2538.8 Private_Read  2290 2290     1      0 1
+: 37 malloc#170 3054.8 Private_Read  2290 2290     1      0 1
+: 38 malloc#170 3572.8 Private_Read  2290 2290     1      0 1
+
+#+begin_src R :results output graphics :file img/intensity_Rw_luleshOMPI_zoom.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=Reads+Writes)) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_Rw_luleshOMPI_zoom.png]]
+
+And the sharing pattern:
+
+#+begin_src R :results output graphics :file img/intensity_share_luleshOMPI.png :exports both :width 600 :height 400 :session
+library(ggplot2);
+p <- ggplot(q) +
+  theme_bw() +
+  geom_segment(size=2, aes(x=Start,xend=End, y=Offset,yend=Offset, color=as.factor(N))) +
+  facet_grid(Structure~Type, scale="free_y")
+  theme_bw() +
+  theme(legend.title=element_blank()) +
+  theme(legend.background=element_blank());
+p
+#+end_src
+
+#+RESULTS:
+[[file:img/intensity_share_luleshOMPI.png]]
+
+
+So this merged malloc contains two part that have a similar usage. I
+guess that it is two different data structures used by a separate pool
+of threads (we should check this).
+
+Each structure is mostly (and intensively) write privately, yet some
+parts are shared with a pattern that seems regular, probably some
+limits of blocks ?
+
+This pattern is totaly different from what we saw on the (very small)
+trace of lulesh-OMP4.
+
+@Lucas: you have already looked at lulesh, what do you think of theses
+traces ? Should we play on lulesh parameters ?
