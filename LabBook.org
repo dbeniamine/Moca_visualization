@@ -9910,7 +9910,7 @@ p
 This time we can see something, it is important to note that the
 timestamp only goes to 15000, which explains what we can't see the
 accesses in the other views.
-* 2016-06-03 First look at Lulesh                                     :David:
+* 2016-06-03 First look at Lulesh (the trace is here)                 :David:
 
 I wasn't able to build lulesh OMP4 from this link
 https://codesign.llnl.gov/lulesh/lulesh2_OMP4.tgz
@@ -10696,6 +10696,9 @@ p
 #+RESULTS:
 [[file:img/intensity_share_lulesh.png]]
 * 2016-06-09 Second try on lulesh Mpi                                 :David:
+
+Download the trace here:
+https://ligcloud.imag.fr/public.php?service=files&t=e25b0c92c6af5a83f5e55ff4a1b5d124
 
 I tried another approach to merge data structures on lulesh OMPi: I
 merge two mallocs if they are consecutive and they comes from the same
