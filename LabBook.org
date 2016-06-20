@@ -12543,3 +12543,17 @@ separatly.
 
 The next step is to look at dgetrf code identify the malloc#1 and try
 to understand what is going on with the stacks.
+
+**  Notes
+
+ The fflas-ffpack used where from version 2.2.1
+ https://github.com/linbox-team/fflas-ffpack/commit/6cf3257580d8b93b1519468e97cf4739c1379be6
+
+Compiled with the following command:
+
+./configure.sh --enable-optimization --with-blas-libs="lopenblas" && make && make install
+
+Using the openblas distributed with debian jessie: libopenblas-dev 0.2.12-1
+
+Everything was executed on a machine from Edel cluster:
+https://www.grid5000.fr/mediawiki/index.php/Grenoble:Hardware#Edel
